@@ -1451,37 +1451,124 @@ app.get('/api/projects/:id/clients', authenticateToken, checkProjectAccess, asyn
 // VOLUNTEER PAIRING
 // ================================
 
+// POST /api/projects/:id/pairs - Create a new pair (FIXED)
 app.post('/api/projects/:id/pairs', authenticateToken, checkProjectAccess, async (req, res) => {
-  try {
-    if (req.userPermission === 'VIEW') {
-      return res.status(403).json({ error: 'Insufficient permissions' });
-    }
+try {
+if (req.userPermission === 'VIEW') {
+return res.status(403).json({
+success: false,
+error: 'Insufficient permissions'
+});
+}
+console.log('Received body:', req.body);
 
-    const { pairs } = req.body;
-    
-    const volunteerPairs = pairs.map(pair => ({
-      projectId: req.params.id,
-      volunteer1Id: pair.volunteer1Id,
-      volunteer2Id: pair.volunteer2Id,
-      compatibility: pair.compatibility || null,
-      isManual: pair.isManual || false,
-      pairName: pair.pairName || null
-    }));
+const {
+  volunteer1Id,
+  volunteer2Id,
+  pairName,
+  compatibility,
+  languageMatch,
+  regionMatch,
+  isManual = true
+} = req.body;
 
-    const createdPairs = await prisma.volunteerPair.createMany({
-      data: volunteerPairs
-    });
+// Basic validation
+if (!volunteer1Id || !volunteer2Id) {
+  return res.status(400).json({
+    success: false,
+    error: 'Both volunteer1Id and volunteer2Id are required'
+  });
+}
 
-    res.json({ 
-      success: true, 
-      count: createdPairs.count,
-      message: `${createdPairs.count} volunteer pairs created` 
-    });
-  } catch (error) {
-    console.error('Create volunteer pairs error:', error);
-    res.status(500).json({ error: 'Failed to create volunteer pairs' });
+if (volunteer1Id === volunteer2Id) {
+  return res.status(400).json({
+    success: false,
+    error: 'Cannot pair a volunteer with themselves'
+  });
+}
+
+// Relaxed validation: only require that both volunteers are part of this project
+// and ignore whether their status is SELECTED.
+// Option A (relaxed statuses): accept SELECTED, PENDING, WAITLISTED
+
+// Still prevent double-pairing within the same project
+const existingPairs = await prisma.volunteerPair.findMany({
+  where: {
+    projectId: req.params.id,
+    isActive: true,
+    OR: [
+      { volunteer1Id: volunteer1Id },
+      { volunteer2Id: volunteer1Id },
+      { volunteer1Id: volunteer2Id },
+      { volunteer2Id: volunteer2Id }
+    ]
   }
 });
+
+if (existingPairs.length > 0) {
+  return res.status(400).json({
+    success: false,
+    error: 'One or both volunteers are already paired in this project'
+  });
+}
+
+// Create the pair
+const newPair = await prisma.volunteerPair.create({
+  data: {
+    projectId: req.params.id,
+    volunteer1Id: volunteer1Id,
+    volunteer2Id: volunteer2Id,
+    pairName: pairName || null,
+    compatibility: compatibility || null,
+    isManual: isManual,
+    isActive: true
+    // ❌ REMOVED: languageMatch and regionMatch (not in schema)
+  },
+  include: {
+    volunteer1: true,
+    volunteer2: true
+  }
+});
+
+
+
+// Log activity
+await prisma.activityLog.create({
+  data: {
+    userId: req.user.userId,
+    projectId: req.params.id,
+    action: 'created_volunteer_pair',
+    details: {
+      pairId: newPair.id,
+      volunteer1: `${newPair.volunteer1.firstName} ${newPair.volunteer1.lastName}`,
+      volunteer2: `${newPair.volunteer2.firstName} ${newPair.volunteer2.lastName}`,
+      compatibility: newPair.compatibility
+    }
+  }
+});
+
+res.status(201).json({
+  success: true,
+  message: 'Pair created successfully',
+  pair: newPair
+});
+
+} catch (error) {
+console.error('Error creating pair:', error);
+if (error.code === 'P2002') {
+return res.status(400).json({
+success: false,
+error: 'This pair already exists'
+});
+}
+res.status(500).json({
+success: false,
+error: 'Failed to create pair',
+message: error.message
+});
+}
+});
+
 
 app.get('/api/projects/:id/pairs', authenticateToken, checkProjectAccess, async (req, res) => {
   try {
@@ -1496,6 +1583,7 @@ app.get('/api/projects/:id/pairs', authenticateToken, checkProjectAccess, async 
       }
     });
 
+    console.log(pairs)
     res.json(pairs);
   } catch (error) {
     console.error('Get volunteer pairs error:', error);
@@ -1686,6 +1774,106 @@ app.delete('/api/projects/:id/collaborators/:userId', authenticateToken, checkPr
   } catch (error) {
     console.error('Remove collaborator error:', error);
     res.status(500).json({ error: 'Failed to remove collaborator' });
+  }
+});
+
+// ================================
+// VOLUNTEER PAIRS ROUTES (Updated)
+// ================================
+
+// GET /api/projects/:id/pairs - Get all pairs for a project
+app.get('/api/projects/:id/pairs', authenticateToken, checkProjectAccess, async (req, res) => {
+  try {
+    const pairs = await prisma.volunteerPair.findMany({
+      where: {
+        projectId: req.params.id,
+        isActive: true
+      },
+      include: {
+        volunteer1: true,
+        volunteer2: true,
+        project: true
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    res.json(pairs);
+  } catch (error) {
+    console.error('Error fetching pairs:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch pairs',
+      message: error.message 
+    });
+  }
+});
+
+
+
+
+// DELETE /api/projects/:id/pairs/:pairId - Delete a pair
+app.delete('/api/projects/:id/pairs/:pairId', authenticateToken, checkProjectAccess, async (req, res) => {
+  try {
+    if (req.userPermission === 'VIEW') {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    const { id: projectId, pairId } = req.params;
+
+    // Check if pair exists and belongs to this project
+    const existingPair = await prisma.volunteerPair.findFirst({
+      where: {
+        id: pairId,
+        projectId: projectId
+      },
+      include: {
+        volunteer1: true,
+        volunteer2: true
+      }
+    });
+
+    if (!existingPair) {
+      return res.status(404).json({
+        success: false,
+        error: 'Pair not found'
+      });
+    }
+
+    // Delete the pair
+    await prisma.volunteerPair.delete({
+      where: {
+        id: pairId
+      }
+    });
+
+    // Log activity
+    await prisma.activityLog.create({
+      data: {
+        userId: req.user.userId,
+        projectId: projectId,
+        action: 'deleted_volunteer_pair',
+        details: {
+          pairId: pairId,
+          volunteer1: `${existingPair.volunteer1.firstName} ${existingPair.volunteer1.lastName}`,
+          volunteer2: `${existingPair.volunteer2.firstName} ${existingPair.volunteer2.lastName}`
+        }
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Pair deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('Error deleting pair:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to delete pair',
+      message: error.message
+    });
   }
 });
 
