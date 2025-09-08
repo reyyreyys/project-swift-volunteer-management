@@ -11,7 +11,14 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET;
 
+const corsOptions = {
+  origin: process.env.FRONTEND_URL || "http://localhost:3000",
+  credentials: true,              // allow cookies/credentials
+  methods: ["GET","POST","PUT","DELETE","OPTIONS"]
+};
 
+// Apply CORS globally (before routes)
+app.use(cors(corsOptions));
 
 // Authentication middleware
 const authenticateToken = (req, res, next) => {
