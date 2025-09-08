@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import { ArrowLeft, Users, UserCheck, Share2, Settings, AlertTriangle, Trash2 } from 'lucide-react';
 import VolunteerCSVImporter from '../volunteers/VolunteerCSVImporter';
+import VolunteerSelectionTable from '../volunteers/VolunteerSelectionTable';
 
 const ProjectDetail = () => {
   const { id } = useParams();
@@ -31,27 +32,23 @@ const ProjectDetail = () => {
     }
   };
 
-const loadProjectData = async () => {
-  try {
-    // Use the new endpoint that calculates experience dynamically
-    const [volunteersRes, clientsRes] = await Promise.all([
-      axios.get(`/projects/${id}/volunteers-with-experience`).catch(() => ({ data: [] })),
-      axios.get(`/projects/${id}/clients`).catch(() => ({ data: [] }))
-    ]);
-    
-    setProjectVolunteers(volunteersRes.data);
-    setProjectClients(clientsRes.data);
-  } catch (error) {
-    console.error('Error loading project data:', error);
-  }
-};
-
+  const loadProjectData = async () => {
+    try {
+      const [volunteersRes, clientsRes] = await Promise.all([
+        axios.get(`/projects/${id}/volunteers-detailed`).catch(() => ({ data: [] })),
+        axios.get(`/projects/${id}/clients`).catch(() => ({ data: [] }))
+      ]);
+      
+      setProjectVolunteers(volunteersRes.data);
+      setProjectClients(clientsRes.data);
+    } catch (error) {
+      console.error('Error loading project data:', error);
+    }
+  };
 
   const handleImportComplete = (result) => {
     console.log('Import completed:', result);
     setShowVolunteerImporter(false);
-    
-    // Refresh the project data to show new volunteers
     loadProjectData();
   };
 
@@ -60,31 +57,30 @@ const loadProjectData = async () => {
     setActiveTab('volunteers');
   };
 
-const handleClearVolunteers = async () => {
-  setClearingVolunteers(true);
-  try {
-    const response = await axios.delete(`/projects/${id}/volunteers`);
-    if (response.data.success) {
-      const { removedFromProject, completelyDeleted } = response.data;
-      let message = `Successfully removed ${removedFromProject} volunteers from project.`;
-      
-      if (completelyDeleted > 0) {
-        message += ` ${completelyDeleted} volunteers were completely deleted as they were only in this project.`;
-      } else {
-        message += ` All volunteers remain available for other projects.`;
+  const handleClearVolunteers = async () => {
+    setClearingVolunteers(true);
+    try {
+      const response = await axios.delete(`/projects/${id}/volunteers`);
+      if (response.data.success) {
+        const { removedFromProject, completelyDeleted } = response.data;
+        let message = `Successfully removed ${removedFromProject} volunteers from project.`;
+        
+        if (completelyDeleted > 0) {
+          message += ` ${completelyDeleted} volunteers were completely deleted as they were only in this project.`;
+        } else {
+          message += ` All volunteers remain available for other projects.`;
+        }
+        
+        alert(message);
+        loadProjectData();
+        setShowClearConfirm(false);
       }
-      
-      alert(message);
-      loadProjectData(); // Refresh the data
-      setShowClearConfirm(false);
+    } catch (error) {
+      alert('Failed to clear volunteers: ' + (error.response?.data?.error || error.message));
+    } finally {
+      setClearingVolunteers(false);
     }
-  } catch (error) {
-    alert('Failed to clear volunteers: ' + (error.response?.data?.error || error.message));
-  } finally {
-    setClearingVolunteers(false);
-  }
-};
-
+  };
 
   if (loading) {
     return (
@@ -218,86 +214,8 @@ const handleClearVolunteers = async () => {
               </div>
             </div>
 
-            {projectVolunteers.length > 0 ? (
-              <div className="volunteers-grid">
-                {projectVolunteers.map(pv => (
-                  <div key={pv.id} className="volunteer-card">
-                    <div className="volunteer-header">
-                      <div>
-                        <h4>{pv.volunteer.firstName} {pv.volunteer.lastName}</h4>
-                        {pv.volunteer.totalProjects > 1 && (
-                          <div className="multi-project-indicator">
-                            <AlertTriangle size={14} />
-                            <span>In {pv.volunteer.totalProjects} projects</span>
-                          </div>
-                        )}
-                      </div>
-                      <div className="volunteer-badges">
-                        {pv.volunteer.isJoiningAsGroup && (
-                          <span className="badge group">Group</span>
-                        )}
-                        {pv.volunteer.hasExperience && (
-                          <span className="badge experience" title={`Experienced (${pv.volunteer.totalProjects} total projects)`}>
-                            Experienced ({pv.volunteer.totalProjects} projects)
-                          </span>
-                        )}
-                        <span className={`badge status-${pv.status.toLowerCase()}`}>
-                          {pv.status}
-                        </span>
-                      </div>
-
-                    </div>
-
-                    <div className="volunteer-details">
-                      <p><strong>Age:</strong> {pv.volunteer.age || 'N/A'}</p>
-                      <p><strong>Contact:</strong> {pv.volunteer.contactNumber || 'N/A'}</p>
-                      <p><strong>Email:</strong> {pv.volunteer.email || 'N/A'}</p>
-                      <p><strong>Languages:</strong> {pv.volunteer.languages?.join(', ') || 'N/A'}</p>
-                      <p><strong>Regions:</strong> {pv.volunteer.regions?.join(', ') || 'N/A'}</p>
-                      <p><strong>Available Days:</strong> {pv.volunteer.availableDays?.join(', ') || 'N/A'}</p>
-                    </div>
-
-                    {pv.volunteer.otherProjects && pv.volunteer.otherProjects.length > 0 && (
-                      <div className="other-projects">
-                        <h5>Also in:</h5>
-                        <div className="project-list">
-                          {pv.volunteer.otherProjects.map(op => (
-                            <Link 
-                              key={op.id} 
-                              to={`/projects/${op.id}`}
-                              className="project-link"
-                            >
-                              {op.name}
-                            </Link>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="volunteer-footer">
-                      <span className="added-at">
-                        Added {new Date(pv.addedAt).toLocaleDateString()}
-                      </span>
-                      <span className="created-by">
-                        by {pv.volunteer.createdBy?.username || 'Unknown'}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="empty-state">
-                <Users size={64} />
-                <h3>No volunteers imported yet</h3>
-                <p>Import your first batch of volunteers to get started</p>
-                <button 
-                  className="create-first-btn"
-                  onClick={() => setShowVolunteerImporter(true)}
-                >
-                  Import Volunteers
-                </button>
-              </div>
-            )}
+            {/* This is the main fix - VolunteerSelectionTable should be the main content */}
+            <VolunteerSelectionTable projectId={project.id} />
           </div>
         )}
 

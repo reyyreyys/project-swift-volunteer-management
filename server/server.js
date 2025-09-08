@@ -201,6 +201,7 @@ app.post('/api/auth/login', async (req, res) => {
 // ================================
 
 // Get volunteers for a specific project, including their involvement in other projects
+// Backend: Get volunteers with their selection status
 app.get('/api/projects/:id/volunteers-detailed', authenticateToken, checkProjectAccess, async (req, res) => {
   try {
     const projectVolunteers = await prisma.projectVolunteer.findMany({
@@ -210,18 +211,6 @@ app.get('/api/projects/:id/volunteers-detailed', authenticateToken, checkProject
           include: {
             createdBy: {
               select: { username: true }
-            },
-            // Include all projects this volunteer is involved in
-            projectVolunteers: {
-              include: {
-                project: {
-                  select: { 
-                    id: true, 
-                    name: true, 
-                    createdAt: true 
-                  }
-                }
-              }
             }
           }
         }
@@ -229,26 +218,9 @@ app.get('/api/projects/:id/volunteers-detailed', authenticateToken, checkProject
       orderBy: { addedAt: 'desc' }
     });
 
-    // Transform the data to include project participation info
-    const volunteersWithProjectInfo = projectVolunteers.map(pv => ({
-      ...pv,
-      volunteer: {
-        ...pv.volunteer,
-        totalProjects: pv.volunteer.projectVolunteers.length,
-        otherProjects: pv.volunteer.projectVolunteers
-          .filter(otherPv => otherPv.projectId !== req.params.id)
-          .map(otherPv => ({
-            id: otherPv.project.id,
-            name: otherPv.project.name,
-            role: otherPv.status,
-            joinedAt: otherPv.addedAt
-          }))
-      }
-    }));
-
-    res.json(volunteersWithProjectInfo);
+    res.json(projectVolunteers);
   } catch (error) {
-    console.error('Get detailed project volunteers error:', error);
+    console.error('Get volunteers error:', error);
     res.status(500).json({ error: 'Failed to get project volunteers' });
   }
 });
@@ -343,19 +315,22 @@ app.delete('/api/projects/:id/volunteers', authenticateToken, checkProjectAccess
       }
     });
 
-    // Filter to get volunteers who are only in this project
+    // Filter to get volunteers who are only in this project AND filter out undefined values
     const volunteerIdsToCompletelyDelete = volunteersOnlyInThisProject
       .filter(pv => pv.volunteer.projectVolunteers.length === 1)
-      .map(pv => pv.volunteer_id);
+      .map(pv => pv.volunteerId) // ✅ Fixed: Use 'volunteerId' not 'volunteer_id'
+      .filter(id => id != null); // ✅ Fixed: Filter out undefined/null values
 
     // Step 2: Delete all project-volunteer relationships for this project first
     const projectVolunteerResult = await prisma.projectVolunteer.deleteMany({
       where: { projectId: projectId }
     });
 
-    // Step 3: Delete volunteers that were only in this project
+    // Step 3: Delete volunteers that were only in this project (only if we have valid IDs)
     let deletedVolunteersResult = { count: 0 };
     if (volunteerIdsToCompletelyDelete.length > 0) {
+      console.log('Deleting volunteers with IDs:', volunteerIdsToCompletelyDelete); // Debug log
+      
       deletedVolunteersResult = await prisma.volunteer.deleteMany({
         where: { 
           id: { 
@@ -388,9 +363,14 @@ app.delete('/api/projects/:id/volunteers', authenticateToken, checkProjectAccess
 
   } catch (error) {
     console.error('Error clearing project volunteers:', error);
-    res.status(500).json({ error: 'Failed to clear project volunteers' });
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to clear project volunteers',
+      details: error.message
+    });
   }
 });
+
 
 // Get volunteers for a specific project with calculated experience based on other projects
 app.get('/api/projects/:id/volunteers-with-experience', authenticateToken, checkProjectAccess, async (req, res) => {
@@ -458,6 +438,10 @@ app.post('/api/volunteers/import-csv', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Invalid volunteer data' });
     }
 
+    if (!projectId) {
+      return res.status(400).json({ error: 'Project ID is required' });
+    }
+
     let createdVolunteers = 0;
     let updatedVolunteers = 0;
     let linkedToProject = 0;
@@ -466,11 +450,49 @@ app.post('/api/volunteers/import-csv', authenticateToken, async (req, res) => {
     await prisma.$transaction(async (tx) => {
       for (const volunteerData of volunteers) {
         try {
+          // Ensure timestamp/submissionDate is properly handled
+          const submissionDate = volunteerData.submissionDate || volunteerData.timestamp || new Date();
+          
           const cleanData = {
-            ...volunteerData,
-            createdById: req.user.userId,
+            firstName: volunteerData.firstName || '',
+            lastName: volunteerData.lastName || '',
+            email: volunteerData.email || null,
+            contactNumber: volunteerData.contactNumber || null,
+            age: volunteerData.age || null,
+            
+            // Commitment & Availability
+            canCommit: volunteerData.canCommit || false,
+            trainingAttendance: volunteerData.trainingAttendance || null,
+            languages: volunteerData.languages || [],
+            regions: volunteerData.regions || [],
+            canTravel: volunteerData.canTravel || false,
+            availableDays: volunteerData.availableDays || [],
+            availableTime: volunteerData.availableTime || [],
+            
+            // Experience - will be recalculated later
             hasExperience: false,
-            totalProjects: 0
+            totalProjects: 0,
+            experienceSummary: volunteerData.experienceSummary || null,
+            
+            // Personal Requirements
+            dietary: volunteerData.dietary || null,
+            hasShirt: volunteerData.hasShirt,
+            shirtSize: volunteerData.shirtSize || null,
+            
+            // Group Information
+            isJoiningAsGroup: volunteerData.isJoiningAsGroup || false,
+            groupName: volunteerData.groupName || null,
+            groupMembers: volunteerData.groupMembers || [],
+            
+            // Additional
+            comments: volunteerData.comments || null,
+            
+            // Timestamps - NOTE: Your schema only has 'timestamp', not 'submissionDate'
+            timestamp: submissionDate,
+            
+            // System fields
+            isPublic: volunteerData.isPublic !== false, // Default to true
+            createdById: req.user.userId
           };
 
           let volunteer;
@@ -508,7 +530,9 @@ app.post('/api/volunteers/import-csv', authenticateToken, async (req, res) => {
                 groupName: cleanData.groupName,
                 groupMembers: cleanData.groupMembers,
                 comments: cleanData.comments,
-                timestamp: cleanData.timestamp
+                experienceSummary: cleanData.experienceSummary,
+                timestamp: cleanData.timestamp,
+                // Don't update createdById for existing volunteers
               }
             });
             isExisting = true;
@@ -521,40 +545,44 @@ app.post('/api/volunteers/import-csv', authenticateToken, async (req, res) => {
             createdVolunteers++;
           }
 
-          // ALWAYS link volunteer to current project (this is the key fix)
+          // ALWAYS link volunteer to current project using correct field names
           const projectVolunteerLink = await tx.projectVolunteer.upsert({
             where: {
               projectId_volunteerId: {
-                projectId: projectId,
+                projectId: projectId, // Keep as string since your schema uses String
                 volunteerId: volunteer.id
               }
             },
             update: {
-              // Update status if needed, but keep existing link
+              // Update status and timestamp but keep existing link
               status: 'PENDING',
-              addedAt: new Date() // Update the added date
+              addedAt: new Date()
             },
             create: {
               projectId: projectId,
               volunteerId: volunteer.id,
               isSelected: false,
               isWaitlist: false,
-              status: 'PENDING'
+              status: 'PENDING',
+              addedAt: new Date()
             }
           });
 
           linkedToProject++;
 
         } catch (error) {
+          console.error(`Error processing volunteer ${volunteerData.firstName} ${volunteerData.lastName}:`, error);
           errors.push({
-            volunteer: `${volunteerData.firstName} ${volunteerData.lastName}`,
+            volunteer: `${volunteerData.firstName || 'Unknown'} ${volunteerData.lastName || 'Volunteer'}`,
             error: error.message
           });
         }
       }
+    });
 
-      // STEP 2: Recalculate experience for ALL volunteers
-      await tx.$executeRaw`
+    // STEP 2: Recalculate experience for ALL volunteers using correct table names
+    try {
+      await prisma.$executeRaw`
         WITH volunteer_counts AS (
           SELECT pv."volunteer_id", COUNT(DISTINCT pv."project_id") AS project_count
           FROM "project_volunteers" pv
@@ -567,7 +595,27 @@ app.post('/api/volunteers/import-csv', authenticateToken, async (req, res) => {
         FROM volunteer_counts vc
         WHERE v.id = vc."volunteer_id"
       `;
-    });
+    } catch (rawQueryError) {
+      console.error('Raw query failed, trying alternative approach:', rawQueryError);
+      
+      // Alternative approach using Prisma operations with correct field names
+      const volunteerCounts = await prisma.projectVolunteer.groupBy({
+        by: ['volunteerId'],
+        _count: {
+          projectId: true
+        }
+      });
+
+      for (const count of volunteerCounts) {
+        await prisma.volunteer.update({
+          where: { id: count.volunteerId },
+          data: {
+            hasExperience: count._count.projectId > 1,
+            totalProjects: count._count.projectId
+          }
+        });
+      }
+    }
 
     // Log activity
     await prisma.activityLog.create({
@@ -579,7 +627,8 @@ app.post('/api/volunteers/import-csv', authenticateToken, async (req, res) => {
           created: createdVolunteers,
           updated: updatedVolunteers,
           linkedToProject: linkedToProject,
-          errors: errors.length
+          errors: errors.length,
+          totalProcessed: volunteers.length
         }
       }
     });
@@ -596,7 +645,81 @@ app.post('/api/volunteers/import-csv', authenticateToken, async (req, res) => {
 
   } catch (error) {
     console.error('CSV import error:', error);
-    res.status(500).json({ error: 'Failed to import volunteers' });
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to import volunteers', 
+      details: error.message 
+    });
+  }
+});
+
+
+// In your backend route
+app.post('/api/projects/:id/volunteer-selections', authenticateToken, checkProjectAccess, async (req, res) => {
+  try {
+    const { selected, waitlisted } = req.body;
+    const projectId = req.params.id;
+
+    // Update selected volunteers
+    await prisma.projectVolunteer.updateMany({
+      where: { 
+        projectId: projectId,
+        id: { in: selected }
+      },
+      data: { 
+        status: 'SELECTED',
+        isSelected: true,
+        isWaitlist: false
+      }
+    });
+
+    // Update waitlisted volunteers  
+    await prisma.projectVolunteer.updateMany({
+      where: { 
+        projectId: projectId,
+        id: { in: waitlisted }
+      },
+      data: { 
+        status: 'WAITLISTED',
+        isSelected: false,
+        isWaitlist: true
+      }
+    });
+
+    // Reset other volunteers to PENDING
+    await prisma.projectVolunteer.updateMany({
+      where: { 
+        projectId: projectId,
+        id: { notIn: [...selected, ...waitlisted] }
+      },
+      data: { 
+        status: 'PENDING',
+        isSelected: false,
+        isWaitlist: false
+      }
+    });
+
+    // Return updated volunteer data
+    const updatedVolunteers = await prisma.projectVolunteer.findMany({
+      where: { projectId: projectId },
+      include: {
+        volunteer: {
+          include: {
+            createdBy: { select: { username: true } }
+          }
+        }
+      }
+    });
+
+    res.json({ 
+      success: true, 
+      message: `Saved ${selected.length} selected and ${waitlisted.length} waitlisted volunteers`,
+      volunteers: updatedVolunteers // Include updated data
+    });
+
+  } catch (error) {
+    console.error('Save selections error:', error);
+    res.status(500).json({ error: 'Failed to save volunteer selections' });
   }
 });
 
