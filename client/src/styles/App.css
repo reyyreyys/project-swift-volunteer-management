@@ -2797,3 +2797,179 @@ body {
 .btn-quick-pair:hover {
   background: #0056b3;
 }
+
+/* Training Day Styles */
+.training-day-container {
+  padding: 20px;
+}
+
+.training-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+}
+
+.training-header h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+}
+
+.training-stats {
+  display: flex;
+  gap: 20px;
+}
+
+.training-section {
+  margin-bottom: 40px;
+}
+
+.training-section h4 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: #333;
+}
+
+.section-description {
+  color: #666;
+  margin-bottom: 20px;
+  font-size: 0.9em;
+}
+
+.training-table,
+.attendance-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 20px;
+}
+
+.training-table th,
+.training-table td,
+.attendance-table th,
+.attendance-table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+
+.training-table th,
+.attendance-table th {
+  background-color: #f8f9fa;
+  font-weight: 600;
+}
+
+.experienced-volunteer {
+  background-color: #f8f9fa;
+}
+
+.needs-training {
+  background-color: #fff3cd;
+}
+
+.experience-indicator {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.has-experience {
+  color: #28a745;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.no-experience {
+  color: #ffc107;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.training-requirement.required {
+  color: #dc3545;
+  font-weight: 600;
+}
+
+.training-requirement.optional {
+  color: #6c757d;
+}
+
+.status-badge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.8em;
+  font-weight: 600;
+}
+
+.status-selected {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+.status-waitlisted {
+  background-color: #fff3cd;
+  color: #856404;
+}
+
+.attendance-actions {
+  margin-bottom: 20px;
+}
+
+.attendance-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.attendance-checkbox {
+  width: 18px;
+  height: 18px;
+}
+
+.attended-label {
+  color: #28a745;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.not-attended-label {
+  color: #dc3545;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-attendance {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.8em;
+}
+
+.btn-mark-present {
+  background-color: #28a745;
+  color: white;
+}
+
+.btn-mark-absent {
+  background-color: #dc3545;
+  color: white;
+}
+
+.attended {
+  background-color: #d4edda;
+}
+
+.not-attended {
+  background-color: #f8d7da;
+}

@@ -1877,6 +1877,213 @@ app.delete('/api/projects/:id/pairs/:pairId', authenticateToken, checkProjectAcc
   }
 });
 
+
+// ================================
+// TRAINING ROUTES
+// ================================
+
+// Update training attendance for individual volunteer
+app.patch('/api/projects/:id/volunteers/:volunteerId/training', authenticateToken, checkProjectAccess, async (req, res) => {
+  try {
+    if (req.userPermission === 'VIEW') {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    const { volunteerId } = req.params;
+    const { trainingAttended } = req.body;
+
+    const updatedVolunteer = await prisma.projectVolunteer.update({
+      where: {
+        id: volunteerId  // Using ProjectVolunteer ID, not volunteer ID
+      },
+      data: {
+        trainingAttended: trainingAttended
+      }
+    });
+
+    res.json({ success: true, data: updatedVolunteer });
+  } catch (error) {
+    console.error('Error updating training attendance:', error);
+    res.status(500).json({ error: 'Failed to update training attendance' });
+  }
+});
+
+// Update training selection for waitlisted volunteer
+app.patch('/api/projects/:id/volunteers/:volunteerId/training-selection', authenticateToken, checkProjectAccess, async (req, res) => {
+  try {
+    if (req.userPermission === 'VIEW') {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    const { volunteerId } = req.params;
+    const { selectedForTraining } = req.body;
+
+    const updatedVolunteer = await prisma.projectVolunteer.update({
+      where: {
+        id: volunteerId  // Using ProjectVolunteer ID, not volunteer ID
+      },
+      data: {
+        selectedForTraining: selectedForTraining
+      }
+    });
+
+    res.json({ success: true, data: updatedVolunteer });
+  } catch (error) {
+    console.error('Error updating training selection:', error);
+    res.status(500).json({ error: 'Failed to update training selection' });
+  }
+});
+
+// Save all training attendance data
+app.post('/api/projects/:id/training-attendance', authenticateToken, checkProjectAccess, async (req, res) => {
+  try {
+    if (req.userPermission === 'VIEW') {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    const { attendance, waitlistedSelection } = req.body;
+
+    // Update attendance for each volunteer
+    if (attendance) {
+      for (const [projectVolunteerId, attended] of Object.entries(attendance)) {
+        await prisma.projectVolunteer.update({
+          where: {
+            id: projectVolunteerId  // Using ProjectVolunteer ID
+          },
+          data: {
+            trainingAttended: attended
+          }
+        });
+      }
+    }
+
+    // Update waitlisted selection for each volunteer
+    if (waitlistedSelection) {
+      for (const [projectVolunteerId, selected] of Object.entries(waitlistedSelection)) {
+        await prisma.projectVolunteer.update({
+          where: {
+            id: projectVolunteerId  // Using ProjectVolunteer ID
+          },
+          data: {
+            selectedForTraining: selected
+          }
+        });
+      }
+    }
+
+    // Log activity
+    await prisma.activityLog.create({
+      data: {
+        userId: req.user.userId,
+        projectId: req.params.id,
+        action: 'updated_training_data',
+        details: {
+          attendanceUpdates: Object.keys(attendance || {}).length,
+          selectionUpdates: Object.keys(waitlistedSelection || {}).length
+        }
+      }
+    });
+
+    res.json({ success: true, message: 'Training data updated successfully' });
+  } catch (error) {
+    console.error('Error saving training data:', error);
+    res.status(500).json({ error: 'Failed to save training data' });
+  }
+});
+
+// Update training attendance for a specific volunteer
+app.patch('/api/projects/:id/volunteers/:volunteerId/training', authenticateToken, checkProjectAccess, async (req, res) => {
+  try {
+    if (req.userPermission === 'VIEW') {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    const { volunteerId } = req.params;
+    const { trainingAttended } = req.body;
+
+    const updatedVolunteer = await prisma.projectVolunteer.update({
+      where: {
+        projectId_volunteerId: {
+          projectId: req.params.id,
+          volunteerId: volunteerId
+        }
+      },
+      data: {
+        trainingAttended: trainingAttended
+      }
+    });
+
+    // Log activity
+    await prisma.activityLog.create({
+      data: {
+        userId: req.user.userId,
+        projectId: req.params.id,
+        action: 'updated_training_attendance',
+        details: {
+          volunteerId: volunteerId,
+          attended: trainingAttended
+        }
+      }
+    });
+
+    res.json({ success: true, data: updatedVolunteer });
+  } catch (error) {
+    console.error('Error updating training attendance:', error);
+    res.status(500).json({ error: 'Failed to update training attendance' });
+  }
+});
+
+// Bulk update training attendance
+app.post('/api/projects/:id/training-attendance', authenticateToken, checkProjectAccess, async (req, res) => {
+  try {
+    if (req.userPermission === 'VIEW') {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    const { attendance } = req.body;
+    let updatedCount = 0;
+
+    // Update each volunteer's training attendance
+    for (const [projectVolunteerId, attended] of Object.entries(attendance)) {
+      try {
+        await prisma.projectVolunteer.updateMany({
+          where: {
+            id: projectVolunteerId,
+            projectId: req.params.id
+          },
+          data: {
+            trainingAttended: attended
+          }
+        });
+        updatedCount++;
+      } catch (error) {
+        console.error(`Error updating attendance for volunteer ${projectVolunteerId}:`, error);
+      }
+    }
+
+    // Log activity
+    await prisma.activityLog.create({
+      data: {
+        userId: req.user.userId,
+        projectId: req.params.id,
+        action: 'bulk_updated_training_attendance',
+        details: {
+          updatedCount: updatedCount,
+          totalVolunteers: Object.keys(attendance).length
+        }
+      }
+    });
+
+    res.json({ 
+      success: true, 
+      message: `Updated training attendance for ${updatedCount} volunteers` 
+    });
+  } catch (error) {
+    console.error('Error bulk updating training attendance:', error);
+    res.status(500).json({ error: 'Failed to update training attendance' });
+  }
+});
+
 // ================================
 // ACTIVITY LOGS
 // ================================
@@ -1918,7 +2125,6 @@ app.use((err, req, res, next) => {
 app.use((req, res) => {
   res.status(404).json({ error: 'Endpoint not found' });
 });
-
 
 
 // Graceful shutdown

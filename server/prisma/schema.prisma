@@ -132,12 +132,14 @@ model Project {
 }
 
 model ProjectVolunteer {
-  id         String                @id @default(cuid())
-  isSelected Boolean               @default(false) @map("is_selected")
-  isWaitlist Boolean               @default(false) @map("is_waitlist")
-  status     ProjectVolunteerStatus @default(PENDING)
-  notes      String?
-  addedAt    DateTime              @default(now()) @map("added_at")
+  id                  String                @id @default(cuid())
+  isSelected          Boolean               @default(false) @map("is_selected")
+  isWaitlist          Boolean               @default(false) @map("is_waitlist")
+  status              ProjectVolunteerStatus @default(PENDING)
+  notes               String?
+  addedAt             DateTime              @default(now()) @map("added_at")
+  trainingAttended    Boolean?              @default(false) @map("training_attended")
+  selectedForTraining Boolean?              @default(false) @map("selected_for_training")
 
   // Relations
   project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -148,6 +150,7 @@ model ProjectVolunteer {
   @@unique([projectId, volunteerId])
   @@map("project_volunteers")
 }
+
 
 model ProjectClient {
   id       String   @id @default(cuid())

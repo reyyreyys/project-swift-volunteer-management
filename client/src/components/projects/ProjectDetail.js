@@ -9,11 +9,13 @@ import {
   Settings, 
   AlertTriangle, 
   Trash2,
-  Link2  // Add this import for the pairing tab icon
+  Link2,
+  BookOpen  // Add this import for the training tab icon
 } from 'lucide-react';
 import VolunteerCSVImporter from '../volunteers/VolunteerCSVImporter';
 import VolunteerSelectionTable from '../volunteers/VolunteerSelectionTable';
-import VolunteerPairingTab from '../volunteers/VolunteerPairingTab';  // Add this import
+import VolunteerPairingTab from '../volunteers/VolunteerPairingTab';
+import TrainingDayTab from '../volunteers/TrainingDayTab';  // Add this import
 
 const ProjectDetail = () => {
   const { id } = useParams();
@@ -120,6 +122,12 @@ const ProjectDetail = () => {
   // Calculate statistics for better tab labels
   const selectedVolunteers = projectVolunteers.filter(pv => pv.status === 'SELECTED').length;
   const waitlistedVolunteers = projectVolunteers.filter(pv => pv.status === 'WAITLISTED').length;
+  const experiencedVolunteers = projectVolunteers.filter(pv => 
+    (pv.status === 'SELECTED' || pv.status === 'WAITLISTED') && pv.volunteer.hasExperience
+  ).length;
+  const needTrainingCount = projectVolunteers.filter(pv => 
+    (pv.status === 'SELECTED' || pv.status === 'WAITLISTED') && !pv.volunteer.hasExperience
+  ).length;
 
   return (
     <div className="project-detail">
@@ -145,7 +153,7 @@ const ProjectDetail = () => {
         </div>
       </div>
 
-      {/* Updated tabs with Pairing tab */}
+      {/* Updated tabs with Training tab */}
       <div className="project-tabs">
         <button 
           className={`tab ${activeTab === 'overview' ? 'active' : ''}`}
@@ -166,6 +174,14 @@ const ProjectDetail = () => {
         >
           <Link2 size={16} />
           Pairing ({selectedVolunteers + waitlistedVolunteers})
+        </button>
+        {/* Add the Training tab */}
+        <button 
+          className={`tab ${activeTab === 'training' ? 'active' : ''}`}
+          onClick={() => setActiveTab('training')}
+        >
+          <BookOpen size={16} />
+          Training ({needTrainingCount})
         </button>
         <button 
           className={`tab ${activeTab === 'clients' ? 'active' : ''}`}
@@ -188,6 +204,13 @@ const ProjectDetail = () => {
                 </p>
               </div>
               <div className="stat-card">
+                <h3>Training Needed</h3>
+                <p className="stat-number">{needTrainingCount}</p>
+                <p className="stat-subtitle">
+                  {experiencedVolunteers} have experience
+                </p>
+              </div>
+              <div className="stat-card">
                 <h3>Clients</h3>
                 <p className="stat-number">{projectClients.length}</p>
               </div>
@@ -206,6 +229,13 @@ const ProjectDetail = () => {
                 >
                   <Users size={24} />
                   <span>Import Volunteers</span>
+                </button>
+                <button 
+                  className="action-card"
+                  onClick={() => setActiveTab('training')}
+                >
+                  <BookOpen size={24} />
+                  <span>Manage Training</span>
                 </button>
                 <button 
                   className="action-card"
@@ -280,6 +310,43 @@ const ProjectDetail = () => {
                 <Link2 size={64} className="empty-icon" />
                 <h3>No volunteers selected for pairing</h3>
                 <p>You need to select volunteers before you can create pairs.</p>
+                <button 
+                  className="btn-primary"
+                  onClick={() => setActiveTab('volunteers')}
+                >
+                  <Users size={16} />
+                  Go to Volunteers Tab
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Add the Training tab content */}
+        {activeTab === 'training' && (
+          <div className="training-tab">
+            <div className="training-header">
+              <h3>Training Day Management</h3>
+              <div className="header-actions">
+                {selectedVolunteers === 0 && waitlistedVolunteers === 0 && (
+                  <button 
+                    className="import-btn primary"
+                    onClick={() => setActiveTab('volunteers')}
+                  >
+                    <Users size={16} />
+                    Select Volunteers First
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {selectedVolunteers > 0 || waitlistedVolunteers > 0 ? (
+              <TrainingDayTab projectId={project.id} refreshKey={refreshKey} />
+            ) : (
+              <div className="empty-training">
+                <BookOpen size={64} className="empty-icon" />
+                <h3>No volunteers selected for training</h3>
+                <p>You need to select volunteers before you can manage their training.</p>
                 <button 
                   className="btn-primary"
                   onClick={() => setActiveTab('volunteers')}
