@@ -1,0 +1,265 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique
+  email     String   @unique
+  password  String
+  role      Role     @default(USER)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  createdProjects   Project[]
+  collaborations    ProjectCollaborator[]
+  activityLogs      ActivityLog[]
+  createdVolunteers Volunteer[]
+  createdClients    Client[]
+
+  @@map("users")
+}
+
+model Volunteer {
+  id               String   @id @default(cuid())
+  
+  // Basic Info
+  firstName        String   @map("first_name")
+  lastName         String   @map("last_name")
+  email            String?
+  contactNumber    String?  @map("contact_number")
+  age              Int?
+  
+  // Commitment & Availability
+  canCommit        Boolean  @default(false) @map("can_commit") // house visits commitment
+  trainingAttendance String? @map("training_attendance") // training availability
+  languages        String[] // Array of languages
+  regions          String[] // Array of regions
+  canTravel        Boolean  @default(false) @map("can_travel")
+  availableDays    String[] @map("available_days")
+  availableTime    String[] @map("available_time")
+  
+  // Experience & Skills
+  hasExperience    Boolean  @default(false) @map("has_experience")
+  experienceSummary String? @map("experience_summary")
+  
+  // Personal Requirements
+  dietary          String?
+  hasShirt         Boolean? @map("has_shirt")
+  shirtSize        String?  @map("shirt_size")
+  
+  // Group Information
+  isJoiningAsGroup Boolean  @default(false) @map("is_joining_as_group")
+  groupName        String?  @map("group_name")
+  groupMembers     String[] @map("group_members") // Names of group members
+  
+  // Additional
+  comments         String?
+  timestamp        DateTime? // When they submitted the form
+  
+  // System fields
+  isPublic         Boolean  @default(true) @map("is_public")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  // Relations (same as before)
+  createdBy         User @relation(fields: [createdById], references: [id])
+  createdById       Int  @map("created_by_id")
+  projectVolunteers ProjectVolunteer[]
+  volunteerPairs    VolunteerPair[]
+
+  @@map("volunteers")
+}
+
+
+model Client {
+  id       String  @id @default(cuid())
+  srcId    String  @unique @map("src_id") // SRC number
+  name     String
+  gender   String?
+  race     String?
+  languages String  // Comma-separated languages
+  address   String
+  location  String  // Region/area
+  isPublic  Boolean @default(true) @map("is_public")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  createdBy     User @relation(fields: [createdById], references: [id])
+  createdById   Int  @map("created_by_id")
+  
+  // Many-to-many with projects
+  projectClients ProjectClient[]
+  assignments    Assignment[]
+
+  @@map("clients")
+}
+
+model Project {
+  id          String        @id @default(cuid())
+  name        String
+  description String?
+  settings    Json?         // Project-specific settings
+  status      ProjectStatus @default(ACTIVE)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  createdBy       User   @relation(fields: [createdById], references: [id])
+  createdById     Int    @map("created_by_id")
+  collaborators   ProjectCollaborator[]
+  activityLogs    ActivityLog[]
+  
+  // Project-specific volunteer and client selections
+  projectVolunteers ProjectVolunteer[]
+  projectClients    ProjectClient[]
+  volunteerPairs    VolunteerPair[]
+  assignments       Assignment[]
+
+  @@map("projects")
+}
+
+model ProjectVolunteer {
+  id         String                @id @default(cuid())
+  isSelected Boolean               @default(false) @map("is_selected")
+  isWaitlist Boolean               @default(false) @map("is_waitlist")
+  status     ProjectVolunteerStatus @default(PENDING)
+  notes      String?
+  addedAt    DateTime              @default(now()) @map("added_at")
+
+  // Relations
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId   String    @map("project_id")
+  volunteer   Volunteer @relation(fields: [volunteerId], references: [id])
+  volunteerId String    @map("volunteer_id")
+
+  @@unique([projectId, volunteerId])
+  @@map("project_volunteers")
+}
+
+model ProjectClient {
+  id       String   @id @default(cuid())
+  priority Int      @default(0) // Priority for assignment
+  notes    String?
+  addedAt  DateTime @default(now()) @map("added_at")
+
+  // Relations
+  project  Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String @map("project_id")
+  client   Client  @relation(fields: [clientId], references: [id])
+  clientId String  @map("client_id")
+
+  @@unique([projectId, clientId])
+  @@map("project_clients")
+}
+
+model VolunteerPair {
+  id            String  @id @default(cuid())
+  pairName      String? @map("pair_name")
+  compatibility Float?  // Compatibility score
+  isManual      Boolean @default(false) @map("is_manual")
+  isActive      Boolean @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  // Relations
+  project      Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId    String    @map("project_id")
+  volunteer1   Volunteer @relation(fields: [volunteer1Id], references: [id])
+  volunteer1Id String    @map("volunteer1_id")
+  volunteer2   Volunteer @relation(fields: [volunteer2Id], references: [id])
+  volunteer2Id String    @map("volunteer2_id")
+  
+  assignments  Assignment[]
+
+  @@unique([projectId, volunteer1Id, volunteer2Id])
+  @@map("volunteer_pairs")
+}
+
+model Assignment {
+  id               String  @id @default(cuid())
+  languageMatch    Boolean @default(false) @map("language_match")
+  regionMatch      Boolean @default(false) @map("region_match")
+  confidenceScore  Float?  @map("confidence_score")
+  status           AssignmentStatus @default(PENDING)
+  notes            String?
+  assignedAt       DateTime @default(now()) @map("assigned_at")
+
+  // Relations
+  project       Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId     String        @map("project_id")
+  client        Client        @relation(fields: [clientId], references: [id])
+  clientId      String        @map("client_id")
+  volunteerPair VolunteerPair @relation(fields: [volunteerPairId], references: [id])
+  volunteerPairId String      @map("volunteer_pair_id")
+
+  @@unique([projectId, clientId])
+  @@map("assignments")
+}
+
+model ProjectCollaborator {
+  id         Int        @id @default(autoincrement())
+  permission Permission @default(VIEW)
+  addedAt    DateTime   @default(now()) @map("added_at")
+
+  // Relations
+  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId  String  @map("project_id")
+  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     Int     @map("user_id")
+
+  @@unique([projectId, userId])
+  @@map("project_collaborators")
+}
+
+model ActivityLog {
+  id        Int      @id @default(autoincrement())
+  action    String
+  details   Json?
+  timestamp DateTime @default(now())
+
+  // Relations
+  user      User     @relation(fields: [userId], references: [id])
+  userId    Int      @map("user_id")
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String   @map("project_id")
+
+  @@map("activity_logs")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum Permission {
+  VIEW
+  EDIT
+  ADMIN
+}
+
+enum ProjectStatus {
+  ACTIVE
+  ARCHIVED
+  DELETED
+}
+
+enum ProjectVolunteerStatus {
+  PENDING
+  SELECTED
+  WAITLISTED
+  REJECTED
+}
+
+enum AssignmentStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
