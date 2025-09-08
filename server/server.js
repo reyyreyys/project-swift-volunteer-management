@@ -985,6 +985,7 @@ app.post('/api/clients/bulk', authenticateToken, async (req, res) => {
 });
 
 // Import clients from CSV
+// Import clients from CSV
 app.post('/api/clients/import-csv', authenticateToken, async (req, res) => {
   try {
     const { clients, projectId } = req.body;
@@ -993,9 +994,16 @@ app.post('/api/clients/import-csv', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Invalid client data' });
     }
 
-    // Process the CSV data
+    // Process the CSV data with proper field mapping
     const processedClients = clients.map(c => ({
-      ...c,
+      srcId: c['SRC #'] || c.srcId || '',
+      name: c['Name'] || c.name || '',
+      gender: c['Gender'] || c.gender || null,
+      race: c['Race'] || c.race || null,
+      languages: c['Language Spoken'] || c.languages || '',
+      address: c['Full Address'] || c.address || '',
+      location: c['Location'] || c.location || '',
+      isPublic: true,
       createdById: req.user.userId
     }));
 
@@ -1005,6 +1013,11 @@ app.post('/api/clients/import-csv', authenticateToken, async (req, res) => {
     
     for (const clientData of processedClients) {
       try {
+        // Skip empty rows
+        if (!clientData.srcId || !clientData.name) {
+          continue;
+        }
+        
         const client = await prisma.client.create({
           data: clientData
         });
@@ -1038,7 +1051,7 @@ app.post('/api/clients/import-csv', authenticateToken, async (req, res) => {
           userId: req.user.userId,
           projectId: projectId,
           action: 'imported_clients',
-          details: { 
+          details: {
             count: createdClients.length,
             errors: errors.length
           }
@@ -1058,7 +1071,6 @@ app.post('/api/clients/import-csv', authenticateToken, async (req, res) => {
         srcId: c.srcId
       }))
     });
-
   } catch (error) {
     console.error('CSV import error:', error);
     res.status(500).json({ error: 'Failed to import clients' });
