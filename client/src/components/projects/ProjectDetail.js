@@ -16,6 +16,7 @@ import VolunteerCSVImporter from '../volunteers/VolunteerCSVImporter';
 import VolunteerSelectionTable from '../volunteers/VolunteerSelectionTable';
 import VolunteerPairingTab from '../volunteers/VolunteerPairingTab';
 import TrainingDayTab from '../volunteers/TrainingDayTab';  // Add this import
+import ClientManagementTab from '../clients/ClientManagementTab'; 
 
 const ProjectDetail = () => {
   const { id } = useParams();
@@ -360,15 +361,11 @@ const ProjectDetail = () => {
         )}
 
         {activeTab === 'clients' && (
-          <div className="clients-tab">
-            <div className="clients-header">
-              <h3>Project Clients ({projectClients.length})</h3>
-            </div>
-            <div className="coming-soon">
-              <h3>Client Management</h3>
-              <p>Client import and management features coming soon...</p>
-            </div>
-          </div>
+          <ClientManagementTab 
+            projectId={id} 
+            refreshKey={refreshKey}
+            onImportComplete={handleImportComplete}
+          />
         )}
       </div>
 

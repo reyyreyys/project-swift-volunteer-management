@@ -2973,3 +2973,123 @@ body {
 .not-attended {
   background-color: #f8d7da;
 }
+/* Client Management Styles */
+.clients-tab {
+  width: 100%;
+  padding: 2rem;
+}
+
+.clients-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.clients-header h3 {
+  color: #2d3748;
+  margin: 0;
+}
+
+.clients-list {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+  overflow: hidden;
+}
+
+.clients-table-container {
+  overflow-x: auto;
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+/* Location grouping styles */
+.location-group {
+  margin-bottom: 2rem;
+}
+
+.location-header {
+  background: #f8fafc;
+  padding: 1rem 1.5rem;
+  border-left: 4px solid #667eea;
+  margin-bottom: 1rem;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.client-count {
+  background: #667eea;
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.875rem;
+  margin-left: 1rem;
+}
+
+.clients-in-location {
+  padding-left: 2rem;
+}
+
+.client-item {
+  display: flex;
+  align-items: center;
+  padding: 1rem;
+  border-bottom: 1px solid #e2e8f0;
+  transition: background-color 0.2s ease;
+}
+
+.client-item:hover {
+  background: #f7fafc;
+}
+
+.client-item:last-child {
+  border-bottom: none;
+}
+
+.client-info {
+  flex-grow: 1;
+}
+
+.client-name {
+  font-weight: 600;
+  color: #2d3748;
+  margin-bottom: 0.25rem;
+}
+
+.client-details {
+  font-size: 0.875rem;
+  color: #718096;
+}
+
+.client-address {
+  font-size: 0.75rem;
+  color: #a0aec0;
+  margin-top: 0.25rem;
+}
+
+/* Empty state */
+.clients-empty-state {
+  text-align: center;
+  padding: 3rem;
+  color: #718096;
+}
+
+/* Import button styles */
+.import-clients-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.import-clients-btn:hover {
+  transform: translateY(-1px);
+}

@@ -14,6 +14,13 @@ const JWT_SECRET = process.env.JWT_SECRET;
 // Middleware
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  credentials: true
+}));
+
+app.options('*', cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   credentials: true
 }));
 app.use(express.json({ limit: '50mb' }));
@@ -2081,6 +2088,65 @@ app.post('/api/projects/:id/training-attendance', authenticateToken, checkProjec
   } catch (error) {
     console.error('Error bulk updating training attendance:', error);
     res.status(500).json({ error: 'Failed to update training attendance' });
+  }
+});
+
+// ================================
+// CLIENTS ROUTES
+// ================================
+// Auto-group clients by area and create optimal groups
+app.post('/api/projects/:id/clients/auto-group', authenticateToken, checkProjectAccess, async (req, res) => {
+  try {
+    if (req.userPermission === 'VIEW') {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    const projectClients = await prisma.projectClient.findMany({
+      where: { projectId: req.params.id },
+      include: { client: true },
+      orderBy: { priority: 'asc' }
+    });
+
+    // Group by location
+    const locationGroups = {};
+    projectClients.forEach(pc => {
+      const location = pc.client.location || 'Unknown';
+      if (!locationGroups[location]) locationGroups[location] = [];
+      locationGroups[location].push(pc.client);
+    });
+
+    // Create optimized groups (3 mandatory + 2 optional = 5 per group)
+    const optimizedGroups = {};
+    Object.keys(locationGroups).forEach(location => {
+      const clients = locationGroups[location];
+      const groups = [];
+      
+      for (let i = 0; i < clients.length; i += 5) {
+        const group = clients.slice(i, i + 5);
+        groups.push({
+          groupId: `${location}-${Math.floor(i/5) + 1}`,
+          location,
+          mandatory: group.slice(0, 3), // First 3 are mandatory
+          optional: group.slice(3, 5),  // Next 2 are optional
+          totalClients: group.length
+        });
+      }
+      optimizedGroups[location] = groups;
+    });
+
+    res.json({
+      success: true,
+      locationGroups: optimizedGroups,
+      summary: Object.keys(optimizedGroups).map(loc => ({
+        location: loc,
+        totalClients: locationGroups[loc].length,
+        groupCount: optimizedGroups[loc].length
+      }))
+    });
+
+  } catch (error) {
+    console.error('Auto-group error:', error);
+    res.status(500).json({ error: 'Failed to create auto groups' });
   }
 });
 
