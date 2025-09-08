@@ -16,12 +16,12 @@ model User {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  // Relations
+  // Relations - with explicit relation names
   createdProjects   Project[]
   collaborations    ProjectCollaborator[]
   activityLogs      ActivityLog[]
-  createdVolunteers Volunteer[]
-  createdClients    Client[]
+  createdVolunteers Volunteer[] @relation("UserCreatedVolunteers")
+  createdClients    Client[]    @relation("UserCreatedClients")
 
   @@map("users")
 }
@@ -32,8 +32,8 @@ model Volunteer {
   // Basic Info
   firstName        String   @map("first_name")
   lastName         String   @map("last_name")
-  email            String?
-  contactNumber    String?  @map("contact_number")
+  email            String?  @unique
+  contactNumber    String?  @unique @map("contact_number")
   age              Int?
   
   // Commitment & Availability
@@ -48,6 +48,7 @@ model Volunteer {
   // Experience & Skills
   hasExperience    Boolean  @default(false) @map("has_experience")
   experienceSummary String? @map("experience_summary")
+  totalProjects    Int      @default(0) @map("total_projects")
   
   // Personal Requirements
   dietary          String?
@@ -68,8 +69,8 @@ model Volunteer {
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
-  // Relations
-  createdBy         User @relation(fields: [createdById], references: [id])
+  // Relations - with explicit relation names
+  createdBy         User @relation("UserCreatedVolunteers", fields: [createdById], references: [id])
   createdById       Int  @map("created_by_id")
   
   // Many-to-many with projects (selected volunteers)
@@ -95,8 +96,8 @@ model Client {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  // Relations
-  createdBy     User @relation(fields: [createdById], references: [id])
+  // Relations - with explicit relation name
+  createdBy     User @relation("UserCreatedClients", fields: [createdById], references: [id])
   createdById   Int  @map("created_by_id")
   
   // Many-to-many with projects
