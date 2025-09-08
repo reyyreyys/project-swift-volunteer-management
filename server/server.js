@@ -17,9 +17,10 @@ const corsOptions = {
   methods: ["GET","POST","PUT","DELETE","OPTIONS"]
 };
 
+
 // Apply CORS globally (before routes)
 app.use(cors(corsOptions));
-
+app.use(express.json({ limit: '50mb' }));
 // Authentication middleware
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
