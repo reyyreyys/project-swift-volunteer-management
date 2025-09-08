@@ -37,10 +37,10 @@ model Volunteer {
   age              Int?
   
   // Commitment & Availability
-  canCommit        Boolean  @default(false) @map("can_commit") // house visits commitment
-  trainingAttendance String? @map("training_attendance") // training availability
-  languages        String[] // Array of languages
-  regions          String[] // Array of regions
+  canCommit        Boolean  @default(false) @map("can_commit")
+  trainingAttendance String? @map("training_attendance")
+  languages        String[]
+  regions          String[]
   canTravel        Boolean  @default(false) @map("can_travel")
   availableDays    String[] @map("available_days")
   availableTime    String[] @map("available_time")
@@ -57,36 +57,40 @@ model Volunteer {
   // Group Information
   isJoiningAsGroup Boolean  @default(false) @map("is_joining_as_group")
   groupName        String?  @map("group_name")
-  groupMembers     String[] @map("group_members") // Names of group members
+  groupMembers     String[] @map("group_members")
   
   // Additional
   comments         String?
-  timestamp        DateTime? // When they submitted the form
+  timestamp        DateTime?
   
   // System fields
   isPublic         Boolean  @default(true) @map("is_public")
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
-  // Relations (same as before)
+  // Relations
   createdBy         User @relation(fields: [createdById], references: [id])
   createdById       Int  @map("created_by_id")
+  
+  // Many-to-many with projects (selected volunteers)
   projectVolunteers ProjectVolunteer[]
-  volunteerPairs    VolunteerPair[]
+  
+  // Volunteer pairing relations with explicit names
+  pairsAsVolunteer1 VolunteerPair[] @relation("Volunteer1Pairs")
+  pairsAsVolunteer2 VolunteerPair[] @relation("Volunteer2Pairs")
 
   @@map("volunteers")
 }
 
-
 model Client {
   id       String  @id @default(cuid())
-  srcId    String  @unique @map("src_id") // SRC number
+  srcId    String  @unique @map("src_id")
   name     String
   gender   String?
   race     String?
-  languages String  // Comma-separated languages
+  languages String
   address   String
-  location  String  // Region/area
+  location  String
   isPublic  Boolean @default(true) @map("is_public")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -106,7 +110,7 @@ model Project {
   id          String        @id @default(cuid())
   name        String
   description String?
-  settings    Json?         // Project-specific settings
+  settings    Json?
   status      ProjectStatus @default(ACTIVE)
   createdAt   DateTime      @default(now()) @map("created_at")
   updatedAt   DateTime      @updatedAt @map("updated_at")
@@ -146,7 +150,7 @@ model ProjectVolunteer {
 
 model ProjectClient {
   id       String   @id @default(cuid())
-  priority Int      @default(0) // Priority for assignment
+  priority Int      @default(0)
   notes    String?
   addedAt  DateTime @default(now()) @map("added_at")
 
@@ -163,17 +167,17 @@ model ProjectClient {
 model VolunteerPair {
   id            String  @id @default(cuid())
   pairName      String? @map("pair_name")
-  compatibility Float?  // Compatibility score
+  compatibility Float?
   isManual      Boolean @default(false) @map("is_manual")
   isActive      Boolean @default(true) @map("is_active")
   createdAt     DateTime @default(now()) @map("created_at")
 
-  // Relations
+  // Relations with explicit relation names
   project      Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   projectId    String    @map("project_id")
-  volunteer1   Volunteer @relation(fields: [volunteer1Id], references: [id])
+  volunteer1   Volunteer @relation("Volunteer1Pairs", fields: [volunteer1Id], references: [id])
   volunteer1Id String    @map("volunteer1_id")
-  volunteer2   Volunteer @relation(fields: [volunteer2Id], references: [id])
+  volunteer2   Volunteer @relation("Volunteer2Pairs", fields: [volunteer2Id], references: [id])
   volunteer2Id String    @map("volunteer2_id")
   
   assignments  Assignment[]

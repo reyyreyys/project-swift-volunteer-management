@@ -1,66 +1,22 @@
 const express = require('express');
-const sqlite3 = require('sqlite3').verbose();
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
+require('dotenv').config();
+
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this';
+const JWT_SECRET = process.env.JWT_SECRET;
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  credentials: true
+}));
 app.use(express.json({ limit: '50mb' }));
-app.use('/uploads', express.static('uploads'));
-
-// Create uploads directory
-if (!fs.existsSync('uploads')) {
-  fs.mkdirSync('uploads');
-}
-
-// Database setup
-const db = new sqlite3.Database('volunteer_system.db');
-
-// Initialize database tables
-db.serialize(() => {
-  db.run(`
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      username TEXT UNIQUE,
-      email TEXT UNIQUE,
-      password TEXT,
-      role TEXT DEFAULT 'user',
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  db.run(`
-    CREATE TABLE IF NOT EXISTS projects (
-      id TEXT PRIMARY KEY,
-      name TEXT,
-      data TEXT,
-      created_by INTEGER,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (created_by) REFERENCES users (id)
-    )
-  `);
-
-  db.run(`
-    CREATE TABLE IF NOT EXISTS project_collaborators (
-      project_id TEXT,
-      user_id INTEGER,
-      permission TEXT DEFAULT 'view',
-      added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY (project_id, user_id),
-      FOREIGN KEY (project_id) REFERENCES projects (id),
-      FOREIGN KEY (user_id) REFERENCES users (id)
-    )
-  `);
-});
 
 // Authentication middleware
 const authenticateToken = (req, res, next) => {
@@ -68,193 +24,1332 @@ const authenticateToken = (req, res, next) => {
   const token = authHeader && authHeader.split(' ')[1];
 
   if (!token) {
-    return res.sendStatus(401);
+    return res.status(401).json({ error: 'Access token required' });
   }
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) return res.sendStatus(403);
+    if (err) {
+      return res.status(403).json({ error: 'Invalid or expired token' });
+    }
     req.user = user;
     next();
   });
 };
 
-// Auth routes
-app.post('/api/auth/register', async (req, res) => {
+// Permission check middleware
+const checkProjectAccess = async (req, res, next) => {
   try {
-    const { username, email, password } = req.body;
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const { id: projectId } = req.params;
+    const userId = req.user.userId;
 
-    db.run(
-      'INSERT INTO users (username, email, password) VALUES (?, ?, ?)',
-      [username, email, hashedPassword],
-      function(err) {
-        if (err) {
-          return res.status(400).json({ error: 'Username or email already exists' });
+    const project = await prisma.project.findFirst({
+      where: {
+        id: projectId,
+        OR: [
+          { createdById: userId },
+          {
+            collaborators: {
+              some: {
+                userId: userId
+              }
+            }
+          }
+        ]
+      },
+      include: {
+        collaborators: {
+          where: { userId: userId }
         }
-        
-        const token = jwt.sign({ userId: this.lastID, username }, JWT_SECRET);
-        res.json({ token, user: { id: this.lastID, username, email } });
       }
-    );
+    });
+
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found or access denied' });
+    }
+
+    req.project = project;
+    req.userPermission = project.createdById === userId ? 'ADMIN' : 
+                        project.collaborators[0]?.permission || 'VIEW';
+    next();
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
+};
+
+// Health check
+app.get('/health', (req, res) => {
+  res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-app.post('/api/auth/login', (req, res) => {
-  const { username, password } = req.body;
+// ================================
+// AUTH ROUTES
+// ================================
 
-  db.get(
-    'SELECT * FROM users WHERE username = ? OR email = ?',
-    [username, username],
-    async (err, user) => {
-      if (err || !user) {
-        return res.status(401).json({ error: 'Invalid credentials' });
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { username, email, password } = req.body;
+
+    // Validate input
+    if (!username || !email || !password) {
+      return res.status(400).json({ error: 'All fields are required' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    // Check if user exists
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { username: username },
+          { email: email }
+        ]
       }
+    });
 
-      const validPassword = await bcrypt.compare(password, user.password);
-      if (!validPassword) {
-        return res.status(401).json({ error: 'Invalid credentials' });
-      }
-
-      const token = jwt.sign(
-        { userId: user.id, username: user.username }, 
-        JWT_SECRET,
-        { expiresIn: '24h' }
-      );
-      
-      res.json({ 
-        token, 
-        user: { 
-          id: user.id, 
-          username: user.username, 
-          email: user.email 
-        } 
+    if (existingUser) {
+      return res.status(400).json({ 
+        error: existingUser.username === username ? 'Username already exists' : 'Email already exists' 
       });
     }
-  );
-});
 
-// Project routes
-app.post('/api/projects', authenticateToken, (req, res) => {
-  const { id, name, data } = req.body;
-  
-  db.run(
-    'INSERT OR REPLACE INTO projects (id, name, data, created_by, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)',
-    [id, name, JSON.stringify(data), req.user.userId],
-    function(err) {
-      if (err) {
-        return res.status(500).json({ error: err.message });
+    // Create user
+    const hashedPassword = await bcrypt.hash(password, 12);
+    const user = await prisma.user.create({
+      data: {
+        username,
+        email,
+        password: hashedPassword
       }
-      res.json({ success: true, message: 'Project saved successfully' });
-    }
-  );
+    });
+
+    // Generate token
+    const token = jwt.sign(
+      { userId: user.id, username: user.username },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.status(201).json({
+      token,
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
-app.get('/api/projects/:id', authenticateToken, (req, res) => {
-  const { id } = req.params;
-  
-  db.get(`
-    SELECT p.*, u.username as created_by_name 
-    FROM projects p 
-    LEFT JOIN users u ON p.created_by = u.id 
-    WHERE p.id = ? AND (
-      p.created_by = ? OR 
-      EXISTS (
-        SELECT 1 FROM project_collaborators pc 
-        WHERE pc.project_id = p.id AND pc.user_id = ?
-      )
-    )
-  `, [id, req.user.userId, req.user.userId], (err, project) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required' });
     }
-    if (!project) {
-      return res.status(404).json({ error: 'Project not found' });
+
+    // Find user
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { username: username },
+          { email: username }
+        ]
+      }
+    });
+
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid credentials' });
     }
+
+    // Verify password
+    const validPassword = await bcrypt.compare(password, user.password);
+    if (!validPassword) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Generate token
+    const token = jwt.sign(
+      { userId: user.id, username: user.username },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ================================
+// VOLUNTEER ROUTES
+// ================================
+
+app.post('/api/volunteers', authenticateToken, async (req, res) => {
+  try {
+    const volunteerData = req.body;
     
+    const volunteer = await prisma.volunteer.create({
+      data: {
+        ...volunteerData,
+        createdById: req.user.userId
+      }
+    });
+
+    res.status(201).json(volunteer);
+  } catch (error) {
+    console.error('Create volunteer error:', error);
+    res.status(500).json({ error: 'Failed to create volunteer' });
+  }
+});
+
+app.post('/api/volunteers/bulk', authenticateToken, async (req, res) => {
+  try {
+    const { volunteers } = req.body;
+    
+    const volunteersWithUserId = volunteers.map(v => ({
+      ...v,
+      createdById: req.user.userId
+    }));
+
+    const createdVolunteers = await prisma.volunteer.createMany({
+      data: volunteersWithUserId,
+      skipDuplicates: true
+    });
+
+    res.status(201).json({
+      success: true,
+      count: createdVolunteers.count,
+      message: `${createdVolunteers.count} volunteers created successfully`
+    });
+  } catch (error) {
+    console.error('Bulk create volunteers error:', error);
+    res.status(500).json({ error: 'Failed to create volunteers' });
+  }
+});
+
+// Import volunteers from CSV
+app.post('/api/volunteers/import-csv', authenticateToken, async (req, res) => {
+  try {
+    const { volunteers, projectId } = req.body;
+    
+    if (!volunteers || !Array.isArray(volunteers)) {
+      return res.status(400).json({ error: 'Invalid volunteer data' });
+    }
+
+    // Process the CSV data
+    const processedVolunteers = volunteers.map(v => ({
+      ...v,
+      createdById: req.user.userId
+    }));
+
+    // Create volunteers in database
+    const createdVolunteers = [];
+    const errors = [];
+    
+    for (const volunteerData of processedVolunteers) {
+      try {
+        const volunteer = await prisma.volunteer.create({
+          data: volunteerData
+        });
+        createdVolunteers.push(volunteer);
+      } catch (error) {
+        errors.push({
+          volunteer: `${volunteerData.firstName} ${volunteerData.lastName}`,
+          error: error.message
+        });
+      }
+    }
+
+    // If projectId is provided, also add them to the project
+    if (projectId && createdVolunteers.length > 0) {
+      const projectVolunteerData = createdVolunteers.map(v => ({
+        projectId: projectId,
+        volunteerId: v.id,
+        isSelected: false, // Will be selected later through filtering
+        status: 'PENDING'
+      }));
+
+      await prisma.projectVolunteer.createMany({
+        data: projectVolunteerData,
+        skipDuplicates: true
+      });
+    }
+
+    // Log activity
+    if (projectId) {
+      await prisma.activityLog.create({
+        data: {
+          userId: req.user.userId,
+          projectId: projectId,
+          action: 'imported_volunteers',
+          details: { 
+            count: createdVolunteers.length,
+            errors: errors.length
+          }
+        }
+      });
+    }
+
+    res.status(201).json({
+      success: true,
+      message: `Successfully imported ${createdVolunteers.length} volunteers`,
+      imported: createdVolunteers.length,
+      errors: errors.length,
+      errorDetails: errors.length > 0 ? errors : undefined,
+      volunteers: createdVolunteers.map(v => ({
+        id: v.id,
+        name: `${v.firstName} ${v.lastName}`,
+        email: v.email
+      }))
+    });
+
+  } catch (error) {
+    console.error('CSV import error:', error);
+    res.status(500).json({ error: 'Failed to import volunteers' });
+  }
+});
+
+app.get('/api/volunteers', authenticateToken, async (req, res) => {
+  try {
+    const { search, region, language, experience, hasGroup } = req.query;
+    
+    const where = {
+      OR: [
+        { createdById: req.user.userId },
+        { isPublic: true }
+      ]
+    };
+
+    // Add filters
+    if (search) {
+      where.AND = where.AND || [];
+      where.AND.push({
+        OR: [
+          { firstName: { contains: search, mode: 'insensitive' } },
+          { lastName: { contains: search, mode: 'insensitive' } },
+          { email: { contains: search, mode: 'insensitive' } }
+        ]
+      });
+    }
+
+    if (region) {
+      where.regions = { has: region };
+    }
+
+    if (language) {
+      where.languages = { has: language };
+    }
+
+    if (experience !== undefined) {
+      where.hasExperience = experience === 'true';
+    }
+
+    if (hasGroup !== undefined) {
+      where.isJoiningAsGroup = hasGroup === 'true';
+    }
+
+    const volunteers = await prisma.volunteer.findMany({
+      where,
+      include: {
+        createdBy: {
+          select: { username: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.json(volunteers);
+  } catch (error) {
+    console.error('Get volunteers error:', error);
+    res.status(500).json({ error: 'Failed to get volunteers' });
+  }
+});
+
+// Get volunteers with detailed filtering for project selection
+app.get('/api/projects/:id/available-volunteers', authenticateToken, checkProjectAccess, async (req, res) => {
+  try {
+    const { 
+      search, 
+      region, 
+      language, 
+      experience, 
+      hasGroup, 
+      canCommit, 
+      canTravel,
+      availableDay,
+      availableTime,
+      minAge,
+      maxAge 
+    } = req.query;
+    
+    const where = {
+      OR: [
+        { createdById: req.user.userId },
+        { isPublic: true }
+      ]
+    };
+
+    // Build complex filters
+    if (search) {
+      where.AND = where.AND || [];
+      where.AND.push({
+        OR: [
+          { firstName: { contains: search, mode: 'insensitive' } },
+          { lastName: { contains: search, mode: 'insensitive' } },
+          { email: { contains: search, mode: 'insensitive' } }
+        ]
+      });
+    }
+
+    if (region) {
+      where.regions = { has: region };
+    }
+
+    if (language) {
+      where.languages = { has: language };
+    }
+
+    if (experience !== undefined) {
+      where.hasExperience = experience === 'true';
+    }
+
+    if (hasGroup !== undefined) {
+      where.isJoiningAsGroup = hasGroup === 'true';
+    }
+
+    if (canCommit !== undefined) {
+      where.canCommit = canCommit === 'true';
+    }
+
+    if (canTravel !== undefined) {
+      where.canTravel = canTravel === 'true';
+    }
+
+    if (availableDay) {
+      where.availableDays = { has: availableDay };
+    }
+
+    if (availableTime) {
+      where.availableTime = { has: availableTime };
+    }
+
+    if (minAge || maxAge) {
+      where.age = {};
+      if (minAge) where.age.gte = parseInt(minAge);
+      if (maxAge) where.age.lte = parseInt(maxAge);
+    }
+
+    const volunteers = await prisma.volunteer.findMany({
+      where,
+      include: {
+        createdBy: {
+          select: { username: true }
+        },
+        projectVolunteers: {
+          where: { projectId: req.params.id },
+          select: { isSelected: true, isWaitlist: true, status: true }
+        }
+      },
+      orderBy: [
+        { isJoiningAsGroup: 'asc' }, // Groups first
+        { hasExperience: 'desc' },   // Experience next
+        { timestamp: 'asc' }         // Then by submission time
+      ]
+    });
+
+    res.json(volunteers);
+  } catch (error) {
+    console.error('Get available volunteers error:', error);
+    res.status(500).json({ error: 'Failed to get available volunteers' });
+  }
+});
+
+app.put('/api/volunteers/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+
+    // Check if user can update this volunteer
+    const volunteer = await prisma.volunteer.findFirst({
+      where: {
+        id: id,
+        createdById: req.user.userId
+      }
+    });
+
+    if (!volunteer) {
+      return res.status(403).json({ error: 'Volunteer not found or access denied' });
+    }
+
+    const updatedVolunteer = await prisma.volunteer.update({
+      where: { id },
+      data: updateData
+    });
+
+    res.json(updatedVolunteer);
+  } catch (error) {
+    console.error('Update volunteer error:', error);
+    res.status(500).json({ error: 'Failed to update volunteer' });
+  }
+});
+
+app.delete('/api/volunteers/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const volunteer = await prisma.volunteer.findFirst({
+      where: {
+        id: id,
+        createdById: req.user.userId
+      }
+    });
+
+    if (!volunteer) {
+      return res.status(403).json({ error: 'Volunteer not found or access denied' });
+    }
+
+    await prisma.volunteer.delete({
+      where: { id }
+    });
+
+    res.json({ success: true, message: 'Volunteer deleted successfully' });
+  } catch (error) {
+    console.error('Delete volunteer error:', error);
+    res.status(500).json({ error: 'Failed to delete volunteer' });
+  }
+});
+
+// ================================
+// CLIENT ROUTES
+// ================================
+
+app.post('/api/clients', authenticateToken, async (req, res) => {
+  try {
+    const clientData = req.body;
+    
+    const client = await prisma.client.create({
+      data: {
+        ...clientData,
+        createdById: req.user.userId
+      }
+    });
+
+    res.status(201).json(client);
+  } catch (error) {
+    console.error('Create client error:', error);
+    res.status(500).json({ error: 'Failed to create client' });
+  }
+});
+
+app.post('/api/clients/bulk', authenticateToken, async (req, res) => {
+  try {
+    const { clients } = req.body;
+    
+    const clientsWithUserId = clients.map(c => ({
+      ...c,
+      createdById: req.user.userId
+    }));
+
+    const createdClients = await prisma.client.createMany({
+      data: clientsWithUserId,
+      skipDuplicates: true
+    });
+
+    res.status(201).json({
+      success: true,
+      count: createdClients.count,
+      message: `${createdClients.count} clients created successfully`
+    });
+  } catch (error) {
+    console.error('Bulk create clients error:', error);
+    res.status(500).json({ error: 'Failed to create clients' });
+  }
+});
+
+// Import clients from CSV
+app.post('/api/clients/import-csv', authenticateToken, async (req, res) => {
+  try {
+    const { clients, projectId } = req.body;
+    
+    if (!clients || !Array.isArray(clients)) {
+      return res.status(400).json({ error: 'Invalid client data' });
+    }
+
+    // Process the CSV data
+    const processedClients = clients.map(c => ({
+      ...c,
+      createdById: req.user.userId
+    }));
+
+    // Create clients in database
+    const createdClients = [];
+    const errors = [];
+    
+    for (const clientData of processedClients) {
+      try {
+        const client = await prisma.client.create({
+          data: clientData
+        });
+        createdClients.push(client);
+      } catch (error) {
+        errors.push({
+          client: `${clientData.name} (${clientData.srcId})`,
+          error: error.message
+        });
+      }
+    }
+
+    // If projectId is provided, also add them to the project
+    if (projectId && createdClients.length > 0) {
+      const projectClientData = createdClients.map((c, index) => ({
+        projectId: projectId,
+        clientId: c.id,
+        priority: index + 1
+      }));
+
+      await prisma.projectClient.createMany({
+        data: projectClientData,
+        skipDuplicates: true
+      });
+    }
+
+    // Log activity
+    if (projectId) {
+      await prisma.activityLog.create({
+        data: {
+          userId: req.user.userId,
+          projectId: projectId,
+          action: 'imported_clients',
+          details: { 
+            count: createdClients.length,
+            errors: errors.length
+          }
+        }
+      });
+    }
+
+    res.status(201).json({
+      success: true,
+      message: `Successfully imported ${createdClients.length} clients`,
+      imported: createdClients.length,
+      errors: errors.length,
+      errorDetails: errors.length > 0 ? errors : undefined,
+      clients: createdClients.map(c => ({
+        id: c.id,
+        name: c.name,
+        srcId: c.srcId
+      }))
+    });
+
+  } catch (error) {
+    console.error('CSV import error:', error);
+    res.status(500).json({ error: 'Failed to import clients' });
+  }
+});
+
+app.get('/api/clients', authenticateToken, async (req, res) => {
+  try {
+    const { search, location, language } = req.query;
+    
+    const where = {
+      OR: [
+        { createdById: req.user.userId },
+        { isPublic: true }
+      ]
+    };
+
+    if (search) {
+      where.AND = where.AND || [];
+      where.AND.push({
+        OR: [
+          { name: { contains: search, mode: 'insensitive' } },
+          { srcId: { contains: search, mode: 'insensitive' } },
+          { address: { contains: search, mode: 'insensitive' } }
+        ]
+      });
+    }
+
+    if (location) {
+      where.location = { contains: location, mode: 'insensitive' };
+    }
+
+    if (language) {
+      where.languages = { contains: language, mode: 'insensitive' };
+    }
+
+    const clients = await prisma.client.findMany({
+      where,
+      include: {
+        createdBy: {
+          select: { username: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.json(clients);
+  } catch (error) {
+    console.error('Get clients error:', error);
+    res.status(500).json({ error: 'Failed to get clients' });
+  }
+});
+
+app.put('/api/clients/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+
+    // Check if user can update this client
+    const client = await prisma.client.findFirst({
+      where: {
+        id: id,
+        createdById: req.user.userId
+      }
+    });
+
+    if (!client) {
+      return res.status(403).json({ error: 'Client not found or access denied' });
+    }
+
+    const updatedClient = await prisma.client.update({
+      where: { id },
+      data: updateData
+    });
+
+    res.json(updatedClient);
+  } catch (error) {
+    console.error('Update client error:', error);
+    res.status(500).json({ error: 'Failed to update client' });
+  }
+});
+
+app.delete('/api/clients/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const client = await prisma.client.findFirst({
+      where: {
+        id: id,
+        createdById: req.user.userId
+      }
+    });
+
+    if (!client) {
+      return res.status(403).json({ error: 'Client not found or access denied' });
+    }
+
+    await prisma.client.delete({
+      where: { id }
+    });
+
+    res.json({ success: true, message: 'Client deleted successfully' });
+  } catch (error) {
+    console.error('Delete client error:', error);
+    res.status(500).json({ error: 'Failed to delete client' });
+  }
+});
+
+// ================================
+// PROJECT ROUTES
+// ================================
+
+app.post('/api/projects', authenticateToken, async (req, res) => {
+  try {
+    const { id, name, description, settings } = req.body;
+    
+    if (!name) {
+      return res.status(400).json({ error: 'Project name is required' });
+    }
+
+    let project;
+    
+    if (id) {
+      // Update existing project
+      project = await prisma.project.findFirst({
+        where: {
+          id: id,
+          OR: [
+            { createdById: req.user.userId },
+            {
+              collaborators: {
+                some: {
+                  userId: req.user.userId,
+                  permission: { in: ['EDIT', 'ADMIN'] }
+                }
+              }
+            }
+          ]
+        }
+      });
+
+      if (!project) {
+        return res.status(403).json({ error: 'Project not found or insufficient permissions' });
+      }
+
+      project = await prisma.project.update({
+        where: { id: id },
+        data: {
+          name,
+          description,
+          settings: settings || project.settings
+        }
+      });
+
+      // Log activity
+      await prisma.activityLog.create({
+        data: {
+          userId: req.user.userId,
+          projectId: project.id,
+          action: 'updated',
+          details: { changes: 'Project details updated' }
+        }
+      });
+    } else {
+      // Create new project
+      project = await prisma.project.create({
+        data: {
+          name,
+          description,
+          settings: settings || {},
+          createdById: req.user.userId
+        }
+      });
+
+      // Log activity
+      await prisma.activityLog.create({
+        data: {
+          userId: req.user.userId,
+          projectId: project.id,
+          action: 'created',
+          details: { name }
+        }
+      });
+    }
+
+    res.json({ 
+      success: true, 
+      message: id ? 'Project updated successfully' : 'Project created successfully',
+      project: {
+        id: project.id,
+        name: project.name,
+        description: project.description
+      }
+    });
+  } catch (error) {
+    console.error('Save project error:', error);
+    res.status(500).json({ error: 'Failed to save project' });
+  }
+});
+
+app.get('/api/projects/:id', authenticateToken, checkProjectAccess, async (req, res) => {
+  try {
+    const project = await prisma.project.findUnique({
+      where: { id: req.params.id },
+      include: {
+        createdBy: {
+          select: { id: true, username: true }
+        },
+        collaborators: {
+          include: {
+            user: {
+              select: { id: true, username: true, email: true }
+            }
+          }
+        }
+      }
+    });
+
     res.json({
       ...project,
-      data: JSON.parse(project.data)
+      userPermission: req.userPermission
     });
-  });
+  } catch (error) {
+    console.error('Load project error:', error);
+    res.status(500).json({ error: 'Failed to load project' });
+  }
 });
 
-app.get('/api/projects', authenticateToken, (req, res) => {
-  db.all(`
-    SELECT DISTINCT p.id, p.name, p.created_at, p.updated_at, 
-           u.username as created_by_name,
-           CASE WHEN p.created_by = ? THEN 'owner' ELSE pc.permission END as permission
-    FROM projects p 
-    LEFT JOIN users u ON p.created_by = u.id
-    LEFT JOIN project_collaborators pc ON p.id = pc.project_id
-    WHERE p.created_by = ? OR pc.user_id = ?
-    ORDER BY p.updated_at DESC
-  `, [req.user.userId, req.user.userId, req.user.userId], (err, projects) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
-    }
-    res.json(projects);
-  });
+app.get('/api/projects', authenticateToken, async (req, res) => {
+  try {
+    const projects = await prisma.project.findMany({
+      where: {
+        OR: [
+          { createdById: req.user.userId },
+          {
+            collaborators: {
+              some: { userId: req.user.userId }
+            }
+          }
+        ],
+        status: 'ACTIVE'
+      },
+      include: {
+        createdBy: {
+          select: { username: true }
+        },
+        collaborators: {
+          where: { userId: req.user.userId },
+          select: { permission: true }
+        },
+        _count: {
+          select: { collaborators: true }
+        }
+      },
+      orderBy: { updatedAt: 'desc' }
+    });
+
+    const projectsWithPermissions = projects.map(project => ({
+      id: project.id,
+      name: project.name,
+      description: project.description,
+      createdAt: project.createdAt,
+      updatedAt: project.updatedAt,
+      createdBy: project.createdBy,
+      collaboratorCount: project._count.collaborators,
+      permission: project.createdById === req.user.userId ? 'ADMIN' : 
+                 project.collaborators[0]?.permission || 'VIEW'
+    }));
+
+    res.json(projectsWithPermissions);
+  } catch (error) {
+    console.error('List projects error:', error);
+    res.status(500).json({ error: 'Failed to list projects' });
+  }
 });
+
+// ================================
+// PROJECT-VOLUNTEER RELATIONSHIPS
+// ================================
+
+// Project-specific volunteer selection
+app.post('/api/projects/:id/volunteers', authenticateToken, checkProjectAccess, async (req, res) => {
+  try {
+    if (req.userPermission === 'VIEW') {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    const { volunteerIds, isWaitlist = false } = req.body;
+    
+    const projectVolunteers = volunteerIds.map(volunteerId => ({
+      projectId: req.params.id,
+      volunteerId,
+      isSelected: !isWaitlist,
+      isWaitlist,
+      status: 'SELECTED'
+    }));
+
+    await prisma.projectVolunteer.createMany({
+      data: projectVolunteers,
+      skipDuplicates: true
+    });
+
+    res.json({ 
+      success: true, 
+      message: `${volunteerIds.length} volunteers added to project` 
+    });
+  } catch (error) {
+    console.error('Add project volunteers error:', error);
+    res.status(500).json({ error: 'Failed to add volunteers to project' });
+  }
+});
+
+app.get('/api/projects/:id/volunteers', authenticateToken, checkProjectAccess, async (req, res) => {
+  try {
+    const projectVolunteers = await prisma.projectVolunteer.findMany({
+      where: { projectId: req.params.id },
+      include: {
+        volunteer: {
+          include: {
+            createdBy: {
+              select: { username: true }
+            }
+          }
+        }
+      }
+    });
+
+    res.json(projectVolunteers);
+  } catch (error) {
+    console.error('Get project volunteers error:', error);
+    res.status(500).json({ error: 'Failed to get project volunteers' });
+  }
+});
+
+// ================================
+// PROJECT-CLIENT RELATIONSHIPS
+// ================================
+
+// Project-specific client selection
+app.post('/api/projects/:id/clients', authenticateToken, checkProjectAccess, async (req, res) => {
+  try {
+    if (req.userPermission === 'VIEW') {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    const { clientIds } = req.body;
+    
+    const projectClients = clientIds.map((clientId, index) => ({
+      projectId: req.params.id,
+      clientId,
+      priority: index + 1
+    }));
+
+    await prisma.projectClient.createMany({
+      data: projectClients,
+      skipDuplicates: true
+    });
+
+    res.json({ 
+      success: true, 
+      message: `${clientIds.length} clients added to project` 
+    });
+  } catch (error) {
+    console.error('Add project clients error:', error);
+    res.status(500).json({ error: 'Failed to add clients to project' });
+  }
+});
+
+app.get('/api/projects/:id/clients', authenticateToken, checkProjectAccess, async (req, res) => {
+  try {
+    const projectClients = await prisma.projectClient.findMany({
+      where: { projectId: req.params.id },
+      include: {
+        client: {
+          include: {
+            createdBy: {
+              select: { username: true }
+            }
+          }
+        }
+      },
+      orderBy: { priority: 'asc' }
+    });
+
+    res.json(projectClients);
+  } catch (error) {
+    console.error('Get project clients error:', error);
+    res.status(500).json({ error: 'Failed to get project clients' });
+  }
+});
+
+// ================================
+// VOLUNTEER PAIRING
+// ================================
+
+app.post('/api/projects/:id/pairs', authenticateToken, checkProjectAccess, async (req, res) => {
+  try {
+    if (req.userPermission === 'VIEW') {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    const { pairs } = req.body;
+    
+    const volunteerPairs = pairs.map(pair => ({
+      projectId: req.params.id,
+      volunteer1Id: pair.volunteer1Id,
+      volunteer2Id: pair.volunteer2Id,
+      compatibility: pair.compatibility || null,
+      isManual: pair.isManual || false,
+      pairName: pair.pairName || null
+    }));
+
+    const createdPairs = await prisma.volunteerPair.createMany({
+      data: volunteerPairs
+    });
+
+    res.json({ 
+      success: true, 
+      count: createdPairs.count,
+      message: `${createdPairs.count} volunteer pairs created` 
+    });
+  } catch (error) {
+    console.error('Create volunteer pairs error:', error);
+    res.status(500).json({ error: 'Failed to create volunteer pairs' });
+  }
+});
+
+app.get('/api/projects/:id/pairs', authenticateToken, checkProjectAccess, async (req, res) => {
+  try {
+    const pairs = await prisma.volunteerPair.findMany({
+      where: { 
+        projectId: req.params.id,
+        isActive: true 
+      },
+      include: {
+        volunteer1: true,
+        volunteer2: true
+      }
+    });
+
+    res.json(pairs);
+  } catch (error) {
+    console.error('Get volunteer pairs error:', error);
+    res.status(500).json({ error: 'Failed to get volunteer pairs' });
+  }
+});
+
+// ================================
+// ASSIGNMENTS
+// ================================
+
+app.post('/api/projects/:id/assignments', authenticateToken, checkProjectAccess, async (req, res) => {
+  try {
+    if (req.userPermission === 'VIEW') {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    const { assignments } = req.body;
+    
+    const assignmentData = assignments.map(assignment => ({
+      projectId: req.params.id,
+      clientId: assignment.clientId,
+      volunteerPairId: assignment.volunteerPairId,
+      languageMatch: assignment.languageMatch || false,
+      regionMatch: assignment.regionMatch || false,
+      confidenceScore: assignment.confidenceScore || null,
+      notes: assignment.notes || null
+    }));
+
+    const createdAssignments = await prisma.assignment.createMany({
+      data: assignmentData
+    });
+
+    res.json({ 
+      success: true, 
+      count: createdAssignments.count,
+      message: `${createdAssignments.count} assignments created` 
+    });
+  } catch (error) {
+    console.error('Create assignments error:', error);
+    res.status(500).json({ error: 'Failed to create assignments' });
+  }
+});
+
+app.get('/api/projects/:id/assignments', authenticateToken, checkProjectAccess, async (req, res) => {
+  try {
+    const assignments = await prisma.assignment.findMany({
+      where: { projectId: req.params.id },
+      include: {
+        client: true,
+        volunteerPair: {
+          include: {
+            volunteer1: true,
+            volunteer2: true
+          }
+        }
+      }
+    });
+
+    res.json(assignments);
+  } catch (error) {
+    console.error('Get assignments error:', error);
+    res.status(500).json({ error: 'Failed to get assignments' });
+  }
+});
+
+// ================================
+// PROJECT COLLABORATION
+// ================================
 
 // Share project with another user
-app.post('/api/projects/:id/share', authenticateToken, (req, res) => {
-  const { id } = req.params;
-  const { username, permission = 'view' } = req.body;
-
-  // First check if user owns the project
-  db.get(
-    'SELECT * FROM projects WHERE id = ? AND created_by = ?',
-    [id, req.user.userId],
-    (err, project) => {
-      if (err || !project) {
-        return res.status(403).json({ error: 'Project not found or access denied' });
-      }
-
-      // Find the user to share with
-      db.get(
-        'SELECT id FROM users WHERE username = ?',
-        [username],
-        (err, user) => {
-          if (err || !user) {
-            return res.status(404).json({ error: 'User not found' });
-          }
-
-          // Add collaborator
-          db.run(
-            'INSERT OR REPLACE INTO project_collaborators (project_id, user_id, permission) VALUES (?, ?, ?)',
-            [id, user.id, permission],
-            (err) => {
-              if (err) {
-                return res.status(500).json({ error: err.message });
-              }
-              res.json({ success: true, message: 'Project shared successfully' });
-            }
-          );
-        }
-      );
+app.post('/api/projects/:id/share', authenticateToken, checkProjectAccess, async (req, res) => {
+  try {
+    if (req.userPermission !== 'ADMIN') {
+      return res.status(403).json({ error: 'Only project owners can share projects' });
     }
-  );
+
+    const { username, permission = 'VIEW' } = req.body;
+    
+    if (!username) {
+      return res.status(400).json({ error: 'Username is required' });
+    }
+
+    // Find user to share with
+    const userToShare = await prisma.user.findUnique({
+      where: { username: username }
+    });
+
+    if (!userToShare) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (userToShare.id === req.user.userId) {
+      return res.status(400).json({ error: 'Cannot share project with yourself' });
+    }
+
+    // Add or update collaborator
+    const collaborator = await prisma.projectCollaborator.upsert({
+      where: {
+        projectId_userId: {
+          projectId: req.params.id,
+          userId: userToShare.id
+        }
+      },
+      update: {
+        permission: permission
+      },
+      create: {
+        projectId: req.params.id,
+        userId: userToShare.id,
+        permission: permission
+      }
+    });
+
+    // Log activity
+    await prisma.activityLog.create({
+      data: {
+        userId: req.user.userId,
+        projectId: req.params.id,
+        action: 'shared',
+        details: { 
+          sharedWith: username,
+          permission: permission
+        }
+      }
+    });
+
+    res.json({ 
+      success: true, 
+      message: `Project shared with ${username}`,
+      collaborator: {
+        username: userToShare.username,
+        permission: collaborator.permission
+      }
+    });
+  } catch (error) {
+    console.error('Share project error:', error);
+    res.status(500).json({ error: 'Failed to share project' });
+  }
 });
 
 // Get project collaborators
-app.get('/api/projects/:id/collaborators', authenticateToken, (req, res) => {
-  const { id } = req.params;
-  
-  db.all(`
-    SELECT u.username, pc.permission, pc.added_at
-    FROM project_collaborators pc
-    JOIN users u ON pc.user_id = u.id
-    WHERE pc.project_id = ?
-  `, [id], (err, collaborators) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
-    }
-    res.json(collaborators);
-  });
+app.get('/api/projects/:id/collaborators', authenticateToken, checkProjectAccess, async (req, res) => {
+  try {
+    const collaborators = await prisma.projectCollaborator.findMany({
+      where: { projectId: req.params.id },
+      include: {
+        user: {
+          select: { id: true, username: true, email: true }
+        }
+      }
+    });
+
+    const formattedCollaborators = collaborators.map(collab => ({
+      id: collab.user.id,
+      username: collab.user.username,
+      email: collab.user.email,
+      permission: collab.permission,
+      addedAt: collab.addedAt
+    }));
+
+    res.json(formattedCollaborators);
+  } catch (error) {
+    console.error('Get collaborators error:', error);
+    res.status(500).json({ error: 'Failed to get collaborators' });
+  }
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+// Remove collaborator
+app.delete('/api/projects/:id/collaborators/:userId', authenticateToken, checkProjectAccess, async (req, res) => {
+  try {
+    if (req.userPermission !== 'ADMIN') {
+      return res.status(403).json({ error: 'Only project owners can remove collaborators' });
+    }
+
+    const { userId } = req.params;
+
+    await prisma.projectCollaborator.delete({
+      where: {
+        projectId_userId: {
+          projectId: req.params.id,
+          userId: parseInt(userId)
+        }
+      }
+    });
+
+    res.json({ success: true, message: 'Collaborator removed successfully' });
+  } catch (error) {
+    console.error('Remove collaborator error:', error);
+    res.status(500).json({ error: 'Failed to remove collaborator' });
+  }
 });
+
+// ================================
+// ACTIVITY LOGS
+// ================================
+
+// Get activity logs
+app.get('/api/projects/:id/activity', authenticateToken, checkProjectAccess, async (req, res) => {
+  try {
+    const activities = await prisma.activityLog.findMany({
+      where: { projectId: req.params.id },
+      include: {
+        user: {
+          select: { username: true }
+        }
+      },
+      orderBy: { timestamp: 'desc' },
+      take: 50 // Limit to last 50 activities
+    });
+
+    res.json(activities);
+  } catch (error) {
+    console.error('Get activity error:', error);
+    res.status(500).json({ error: 'Failed to get activity logs' });
+  }
+});
+
+// ================================
+// ERROR HANDLING & STARTUP
+// ================================
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
+// 404 handler
+app.use('*', (req, res) => {
+  res.status(404).json({ error: 'Endpoint not found' });
+});
+
+// Graceful shutdown
+process.on('beforeExit', async () => {
+  await prisma.$disconnect();
+});
+
+const startServer = async () => {
+  try {
+    // Test database connection
+    await prisma.$connect();
+    console.log('✅ Database connected successfully');
+    
+    app.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`📊 Environment: ${process.env.NODE_ENV}`);
+      console.log(`🌐 CORS enabled for: ${process.env.FRONTEND_URL || 'http://localhost:3000'}`);
+    });
+  } catch (error) {
+    console.error('❌ Failed to start server:', error);
+    process.exit(1);
+  }
+};
+
+startServer();
