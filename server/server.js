@@ -18,11 +18,7 @@ app.use(cors({
   credentials: true
 }));
 
-app.options('*', cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  credentials: true
-}));
+
 app.use(express.json({ limit: '50mb' }));
 
 // Authentication middleware
