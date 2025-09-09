@@ -42,7 +42,7 @@ const ClientCSVImporter = ({ projectId, onImportComplete, onClose }) => {
       header: true,
       complete: async (results) => {
         try {
-          const response = await axios.post('/api/clients/import-csv', {
+          const response = await axios.post('/clients/import-csv', {
             clients: results.data,
             projectId: projectId
           });

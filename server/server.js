@@ -1124,6 +1124,85 @@ app.get('/api/clients', authenticateToken, async (req, res) => {
   }
 });
 
+// Clear all clients from a specific project (and delete clients only in this project)
+app.delete('/api/projects/:id/clients', authenticateToken, checkProjectAccess, async (req, res) => {
+  try {
+    // Check if user has permission (project owner or admin)
+    if (req.userPermission === 'VIEW') {
+      return res.status(403).json({ error: 'Insufficient permissions to clear clients' });
+    }
+
+    const projectId = req.params.id;
+
+    // Step 1: Find clients that are ONLY in this project
+    const clientsOnlyInThisProject = await prisma.projectClient.findMany({
+      where: { projectId: projectId },
+      select: {
+        clientId: true,
+        client: {
+          include: {
+            projectClients: {
+              select: { projectId: true }
+            }
+          }
+        }
+      }
+    });
+
+    // Filter to get clients who are only in this project
+    const clientIdsToCompletelyDelete = clientsOnlyInThisProject
+      .filter(pc => pc.client.projectClients.length === 1)
+      .map(pc => pc.clientId)
+      .filter(id => id != null);
+
+    // Step 2: Delete all project-client relationships for this project first
+    const projectClientResult = await prisma.projectClient.deleteMany({
+      where: { projectId: projectId }
+    });
+
+    // Step 3: Delete clients that were only in this project (only if we have valid IDs)
+    let deletedClientsResult = { count: 0 };
+    if (clientIdsToCompletelyDelete.length > 0) {
+      console.log('Deleting clients with IDs:', clientIdsToCompletelyDelete); // Debug log
+      deletedClientsResult = await prisma.client.deleteMany({
+        where: {
+          id: {
+            in: clientIdsToCompletelyDelete
+          }
+        }
+      });
+    }
+
+    // Step 4: Log the action
+    await prisma.activityLog.create({
+      data: {
+        userId: req.user.userId,
+        projectId: projectId,
+        action: 'cleared_project_clients',
+        details: {
+          removedFromProject: projectClientResult.count,
+          completelyDeleted: deletedClientsResult.count,
+          clientIdsDeleted: clientIdsToCompletelyDelete
+        }
+      }
+    });
+
+    res.json({
+      success: true,
+      message: `Cleared ${projectClientResult.count} clients from project. ${deletedClientsResult.count} clients were completely deleted as they were only in this project.`,
+      removedFromProject: projectClientResult.count,
+      completelyDeleted: deletedClientsResult.count
+    });
+  } catch (error) {
+    console.error('Error clearing project clients:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to clear project clients',
+      details: error.message
+    });
+  }
+});
+
 app.put('/api/clients/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
