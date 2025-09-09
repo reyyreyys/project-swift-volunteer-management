@@ -3604,3 +3604,583 @@ body {
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   }
 }
+
+/* Enhanced Client Grouping Styles */
+.location-clients-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 1rem;
+  padding-left: 1rem;
+  margin-bottom: 2rem;
+}
+
+.client-card {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  transition: all 0.2s ease;
+}
+
+.client-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.client-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.client-name-section h4 {
+  margin: 0;
+  color: #2d3748;
+  font-size: 1.1rem;
+}
+
+.client-src-id {
+  font-size: 0.875rem;
+  color: #667eea;
+  background: #edf2f7;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  margin-top: 0.5rem;
+  display: inline-block;
+  font-weight: 600;
+}
+
+.client-details-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.client-detail-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+  color: #4a5568;
+}
+
+.client-detail-row svg {
+  color: #718096;
+  flex-shrink: 0;
+}
+
+.remove-client-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: #fee;
+  color: #c53030;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.remove-client-btn:hover {
+  background: #fed7d7;
+  transform: scale(1.05);
+}
+
+/* Location Group Summary Stats */
+.location-stats {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 1rem;
+  background: #f8fafc;
+  border-radius: 8px;
+  border-left: 4px solid #667eea;
+}
+
+.location-stat {
+  text-align: center;
+}
+
+.location-stat-number {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #2d3748;
+}
+
+.location-stat-label {
+  font-size: 0.75rem;
+  color: #718096;
+  text-transform: uppercase;
+}
+
+/* Client Grouping Styles */
+.groups-container {
+  width: 100%;
+}
+
+.groups-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #f1f5f9;
+}
+
+.group-actions {
+  display: flex;
+  gap: 1rem;
+}
+
+.view-toggle {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn.active {
+  background: #667eea;
+  color: white;
+}
+
+.groups-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  gap: 2rem;
+}
+
+.client-group-card {
+  background: white;
+  border-radius: 16px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  border: 1px solid #f1f5f9;
+  transition: all 0.3s ease;
+}
+
+.client-group-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+}
+
+.group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.5rem;
+}
+
+.group-info h4 {
+  color: #2d3748;
+  margin-bottom: 0.5rem;
+}
+
+.group-location {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #667eea;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.btn-small {
+  padding: 0.5rem;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-danger {
+  background: #ef4444;
+  color: white;
+}
+
+.btn-danger:hover {
+  background: #dc2626;
+}
+
+.group-clients {
+  margin-bottom: 1.5rem;
+}
+
+.mandatory-section,
+.optional-section {
+  margin-bottom: 1rem;
+}
+
+.mandatory-section h5,
+.optional-section h5 {
+  color: #4a5568;
+  margin-bottom: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.client-item.mandatory {
+  border-left: 4px solid #10b981;
+  background: #f0fdf4;
+}
+
+.client-item.optional {
+  border-left: 4px solid #f59e0b;
+  background: #fffbeb;
+}
+
+.group-summary {
+  padding-top: 1rem;
+  border-top: 1px solid #e2e8f0;
+  font-size: 0.875rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: #6b7280;
+}
+
+.empty-state svg {
+  color: #d1d5db;
+  margin-bottom: 1rem;
+}
+/* Updated Client Management - More Compact & Space Efficient */
+
+.clients-tab {
+  padding: 1.5rem;
+  max-width: 100%;
+}
+
+.location-group {
+  margin-bottom: 1.5rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.location-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.location-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: #2d3748;
+  font-size: 0.875rem;
+}
+
+.client-count {
+  background: #4299e1;
+  color: white;
+  padding: 0.125rem 0.5rem;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  margin-left: 0.5rem;
+}
+
+/* Compact Client Grid - More columns, less vertical space */
+.location-clients-grid,
+.clients-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0.75rem;
+  padding: 1rem;
+}
+
+/* Ultra-compact client cards */
+.client-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 0.75rem;
+  background: white;
+  transition: all 0.2s;
+  font-size: 0.875rem;
+  line-height: 1.3;
+}
+
+.client-card:hover {
+  border-color: #cbd5e0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+}
+
+.client-card.mandatory {
+  border-left: 3px solid #e53e3e;
+}
+
+.client-card.optional {
+  border-left: 3px solid #38a169;
+}
+
+.client-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.5rem;
+  gap: 0.5rem;
+}
+
+.client-name-section {
+  flex: 1;
+  min-width: 0;
+}
+
+.client-name-section h4 {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #2d3748;
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+.client-src-id {
+  font-size: 0.75rem;
+  color: #667eea;
+  font-weight: 500;
+  margin-top: 0.125rem;
+}
+
+.client-actions {
+  display: flex;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+.remove-client-btn {
+  padding: 0.25rem;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: #e53e3e;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.remove-client-btn:hover {
+  background: #fed7d7;
+}
+
+.remove-client-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Compact client details */
+.client-details-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: #4a5568;
+}
+
+.client-detail-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.375rem;
+  line-height: 1.2;
+}
+
+.client-detail-row svg {
+  color: #718096;
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  margin-top: 0.125rem;
+}
+
+.client-detail-row span {
+  word-break: break-word;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Group containers - more compact */
+.group-container {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  margin-bottom: 1rem;
+}
+
+.group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.group-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  font-size: 0.875rem;
+}
+
+.group-name {
+  font-weight: 600;
+  color: #2d3748;
+  margin: 0;
+}
+
+.group-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.delete-group-btn {
+  padding: 0.375rem;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: #e53e3e;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.delete-group-btn:hover {
+  background: #fed7d7;
+}
+
+.delete-group-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Section headers - more compact */
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding-left: 1rem;
+}
+
+.section-title.mandatory {
+  color: #c53030;
+}
+
+.section-title.optional {
+  color: #2f855a;
+}
+
+/* Reduce spacing in group clients */
+.group-clients {
+  padding: 1rem;
+}
+
+.client-section {
+  margin-bottom: 1rem;
+}
+
+.client-section:last-child {
+  margin-bottom: 0;
+}
+
+/* More responsive breakpoints */
+@media (max-width: 1400px) {
+  .location-clients-grid,
+  .clients-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 0.625rem;
+  }
+}
+
+@media (max-width: 1200px) {
+  .location-clients-grid,
+  .clients-grid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 0.5rem;
+  }
+  
+  .client-card {
+    padding: 0.625rem;
+  }
+}
+
+@media (max-width: 900px) {
+  .location-clients-grid,
+  .clients-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 0.75rem;
+  }
+}
+
+@media (max-width: 600px) {
+  .location-clients-grid,
+  .clients-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .clients-tab {
+    padding: 1rem;
+  }
+}
+
+/* Reduce header spacing */
+.clients-header {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+}
+
+.search-bar {
+  margin-bottom: 1.5rem;
+}
+
+/* Make buttons more compact */
+.header-actions {
+  gap: 0.75rem;
+}
+
+.import-clients-btn,
+.group-clients-btn,
+.clear-btn {
+  padding: 0.5rem 0.875rem;
+  font-size: 0.875rem;
+}
+
+/* More compact empty states */
+.empty-state {
+  padding: 2rem 1rem;
+}
+
+.empty-icon {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 1rem;
+}
+
+.empty-title {
+  font-size: 1.125rem;
+  margin-bottom: 0.5rem;
+}

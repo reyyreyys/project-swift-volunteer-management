@@ -2236,6 +2236,639 @@ app.post('/api/projects/:id/clients/auto-group', authenticateToken, checkProject
     res.status(500).json({ error: 'Failed to create auto groups' });
   }
 });
+// ================================
+// CLIENT GROUP ROUTES
+// ================================
+
+// Get client groups for a project
+app.get('/api/projects/:id/client-groups', authenticateToken, checkProjectAccess, async (req, res) => {
+  try {
+    // Debug: Check what models are available
+    console.log('Prisma models:', Object.keys(prisma).filter(key => !key.startsWith('$')));
+    console.log('clientGroup model:', prisma.clientGroup);
+    
+    if (!prisma.clientGroup) {
+      return res.status(500).json({ error: 'ClientGroup model not found in Prisma Client' });
+    }
+
+    const groups = await prisma.clientGroup.findMany({
+      where: { projectId: req.params.id },
+      include: {
+        groupClients: {
+          include: {
+            client: true  // ✅ Fixed: Added `: true`
+          },
+          orderBy: { priority: 'asc' }
+        }
+      },
+      orderBy: [
+        { location: 'asc' },
+        { groupNumber: 'asc' }
+      ]
+    });
+
+    res.json(groups);
+  } catch (error) {
+    console.error('Get client groups error:', error);
+    res.status(500).json({ error: 'Failed to get client groups' });
+  }
+});
+
+
+// Auto-group clients by location
+app.post('/api/projects/:id/clients/auto-group', authenticateToken, checkProjectAccess, async (req, res) => {
+  try {
+    if (req.userPermission === 'VIEW') {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    const projectClients = await prisma.projectClient.findMany({
+      where: { projectId: req.params.id },
+      include: { client: true },
+      orderBy: { priority: 'asc' }
+    });
+
+    if (projectClients.length === 0) {
+      return res.status(400).json({ error: 'No clients found to group' });
+    }
+
+    // Clear existing groups first
+    await prisma.clientGroup.deleteMany({
+      where: { projectId: req.params.id }
+    });
+
+    // Group by location
+    const locationGroups = {};
+    projectClients.forEach(pc => {
+      const location = pc.client.location || 'Unknown Location';
+      if (!locationGroups[location]) locationGroups[location] = [];
+      locationGroups[location].push(pc.client);
+    });
+
+    const createdGroups = [];
+    const summary = [];
+
+    // Create optimized groups for each location
+    for (const [location, clients] of Object.entries(locationGroups)) {
+      let groupNumber = 1;
+      
+      // Create groups with up to 5 clients each (3 mandatory + 2 optional)
+      for (let i = 0; i < clients.length; i += 5) {
+        const groupClients = clients.slice(i, i + 5);
+        const mandatoryClients = groupClients.slice(0, Math.min(3, groupClients.length));
+        const optionalClients = groupClients.slice(3);
+
+        // Create the group
+        const group = await prisma.clientGroup.create({
+          data: {
+            name: `${location} - Group ${groupNumber}`,
+            location,
+            groupNumber,
+            projectId: req.params.id,
+            maxMandatory: 3,
+            maxOptional: 2
+          }
+        });
+
+        // Add mandatory clients
+        for (let j = 0; j < mandatoryClients.length; j++) {
+          await prisma.groupClient.create({
+            data: {
+              clientId: mandatoryClients[j].id,
+              groupId: group.id,
+              type: 'MANDATORY',
+              priority: j + 1
+            }
+          });
+        }
+
+        // Add optional clients
+        for (let j = 0; j < optionalClients.length; j++) {
+          await prisma.groupClient.create({
+            data: {
+              clientId: optionalClients[j].id,
+              groupId: group.id,
+              type: 'OPTIONAL',
+              priority: mandatoryClients.length + j + 1
+            }
+          });
+        }
+
+        createdGroups.push({
+          ...group,
+          mandatory: mandatoryClients.length,
+          optional: optionalClients.length,
+          total: groupClients.length
+        });
+        
+        groupNumber++;
+      }
+
+      // Add to summary
+      summary.push({
+        location,
+        totalClients: clients.length,
+        groupCount: Math.ceil(clients.length / 5)
+      });
+    }
+
+    // Log activity
+    await prisma.activityLog.create({
+      data: {
+        userId: req.user.userId,
+        projectId: req.params.id,
+        action: 'auto_grouped_clients',
+        details: {
+          groupsCreated: createdGroups.length,
+          clientsGrouped: projectClients.length,
+          locations: Object.keys(locationGroups).length
+        }
+      }
+    });
+
+    res.json({
+      success: true,
+      message: `Successfully created ${createdGroups.length} client groups across ${Object.keys(locationGroups).length} locations`,
+      groups: createdGroups,
+      summary
+    });
+
+  } catch (error) {
+    console.error('Auto-group clients error:', error);
+    res.status(500).json({ error: 'Failed to auto-group clients' });
+  }
+});
+
+// Create custom client groups
+app.post('/api/projects/:id/client-groups', authenticateToken, checkProjectAccess, async (req, res) => {
+  try {
+    if (req.userPermission === 'VIEW') {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    const { groups } = req.body;
+    const projectId = req.params.id;
+
+    if (!groups || !Array.isArray(groups) || groups.length === 0) {
+      return res.status(400).json({ error: 'No groups provided' });
+    }
+
+    const createdGroups = [];
+
+    // Use transaction to ensure all groups are created successfully
+    await prisma.$transaction(async (tx) => {
+      for (const groupData of groups) {
+        const { 
+          name, 
+          location, 
+          groupNumber = 1,
+          mandatoryClients = [], 
+          optionalClients = [],
+          maxMandatory = 3,
+          maxOptional = 2
+        } = groupData;
+
+        if (!name || !location) {
+          throw new Error('Group name and location are required');
+        }
+
+        // Create the group
+        const group = await tx.clientGroup.create({
+          data: {
+            name,
+            location,
+            groupNumber,
+            projectId,
+            maxMandatory,
+            maxOptional
+          }
+        });
+
+        // Add mandatory clients
+        for (let i = 0; i < mandatoryClients.length && i < maxMandatory; i++) {
+          await tx.groupClient.create({
+            data: {
+              clientId: mandatoryClients[i].id,
+              groupId: group.id,
+              type: 'MANDATORY',
+              priority: i + 1
+            }
+          });
+        }
+
+        // Add optional clients
+        for (let i = 0; i < optionalClients.length && i < maxOptional; i++) {
+          await tx.groupClient.create({
+            data: {
+              clientId: optionalClients[i].id,
+              groupId: group.id,
+              type: 'OPTIONAL',
+              priority: mandatoryClients.length + i + 1
+            }
+          });
+        }
+
+        createdGroups.push(group);
+      }
+    });
+
+    // Log activity
+    await prisma.activityLog.create({
+      data: {
+        userId: req.user.userId,
+        projectId: projectId,
+        action: 'created_client_groups',
+        details: {
+          groupsCreated: createdGroups.length
+        }
+      }
+    });
+
+    res.json({
+      success: true,
+      message: `Created ${createdGroups.length} client groups successfully`,
+      groups: createdGroups
+    });
+
+  } catch (error) {
+    console.error('Create client groups error:', error);
+    res.status(500).json({ 
+      error: error.message || 'Failed to create client groups' 
+    });
+  }
+});
+
+// Update a client group
+app.put('/api/projects/:id/client-groups/:groupId', authenticateToken, checkProjectAccess, async (req, res) => {
+  try {
+    if (req.userPermission === 'VIEW') {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    const { groupId } = req.params;
+    const { name, location, mandatoryClients = [], optionalClients = [] } = req.body;
+
+    // Verify group belongs to project
+    const existingGroup = await prisma.clientGroup.findFirst({
+      where: {
+        id: groupId,
+        projectId: req.params.id
+      }
+    });
+
+    if (!existingGroup) {
+      return res.status(404).json({ error: 'Client group not found' });
+    }
+
+    // Use transaction for atomic updates
+    const updatedGroup = await prisma.$transaction(async (tx) => {
+      // Update group info
+      const group = await tx.clientGroup.update({
+        where: { id: groupId },
+        data: {
+          ...(name && { name }),
+          ...(location && { location })
+        }
+      });
+
+      // Remove existing group clients
+      await tx.groupClient.deleteMany({
+        where: { groupId: groupId }
+      });
+
+      // Add mandatory clients
+      for (let i = 0; i < mandatoryClients.length && i < group.maxMandatory; i++) {
+        await tx.groupClient.create({
+          data: {
+            clientId: mandatoryClients[i].id,
+            groupId: groupId,
+            type: 'MANDATORY',
+            priority: i + 1
+          }
+        });
+      }
+
+      // Add optional clients
+      for (let i = 0; i < optionalClients.length && i < group.maxOptional; i++) {
+        await tx.groupClient.create({
+          data: {
+            clientId: optionalClients[i].id,
+            groupId: groupId,
+            type: 'OPTIONAL',
+            priority: mandatoryClients.length + i + 1
+          }
+        });
+      }
+
+      return group;
+    });
+
+    // Log activity
+    await prisma.activityLog.create({
+      data: {
+        userId: req.user.userId,
+        projectId: req.params.id,
+        action: 'updated_client_group',
+        details: {
+          groupId: groupId,
+          groupName: updatedGroup.name
+        }
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Client group updated successfully',
+      group: updatedGroup
+    });
+
+  } catch (error) {
+    console.error('Update client group error:', error);
+    res.status(500).json({ error: 'Failed to update client group' });
+  }
+});
+
+// Delete a client group
+app.delete('/api/projects/:id/client-groups/:groupId', authenticateToken, checkProjectAccess, async (req, res) => {
+  try {
+    if (req.userPermission === 'VIEW') {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    const { groupId } = req.params;
+
+    // Verify group belongs to project
+    const existingGroup = await prisma.clientGroup.findFirst({
+      where: {
+        id: groupId,
+        projectId: req.params.id
+      }
+    });
+
+    if (!existingGroup) {
+      return res.status(404).json({ error: 'Client group not found' });
+    }
+
+    // Delete the group (cascade will remove group clients)
+    await prisma.clientGroup.delete({
+      where: { id: groupId }
+    });
+
+    // Log activity
+    await prisma.activityLog.create({
+      data: {
+        userId: req.user.userId,
+        projectId: req.params.id,
+        action: 'deleted_client_group',
+        details: {
+          groupId: groupId,
+          groupName: existingGroup.name
+        }
+      }
+    });
+
+    res.json({ 
+      success: true, 
+      message: 'Client group deleted successfully' 
+    });
+
+  } catch (error) {
+    console.error('Delete client group error:', error);
+    res.status(500).json({ error: 'Failed to delete client group' });
+  }
+});
+
+// Delete all client groups for a project
+app.delete('/api/projects/:id/client-groups/all', authenticateToken, checkProjectAccess, async (req, res) => {
+  try {
+    if (req.userPermission === 'VIEW') {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    const projectId = req.params.id;
+
+    // Get count of existing groups
+    const groupCount = await prisma.clientGroup.count({
+      where: { projectId }
+    });
+
+    if (groupCount === 0) {
+      return res.json({
+        success: true,
+        message: 'No client groups found to delete'
+      });
+    }
+
+    // Delete all groups for the project
+    await prisma.clientGroup.deleteMany({
+      where: { projectId }
+    });
+
+    // Log activity
+    await prisma.activityLog.create({
+      data: {
+        userId: req.user.userId,
+        projectId: projectId,
+        action: 'deleted_all_client_groups',
+        details: {
+          groupsDeleted: groupCount
+        }
+      }
+    });
+
+    res.json({
+      success: true,
+      message: `Successfully deleted ${groupCount} client groups`
+    });
+
+  } catch (error) {
+    console.error('Delete all client groups error:', error);
+    res.status(500).json({ error: 'Failed to delete all client groups' });
+  }
+});
+
+// Get group statistics
+app.get('/api/projects/:id/client-groups/stats', authenticateToken, checkProjectAccess, async (req, res) => {
+  try {
+    const groups = await prisma.clientGroup.findMany({
+      where: { projectId: req.params.id },
+      include: {
+        groupClients: {
+          include: {
+            client: true
+          }
+        }
+      }
+    });
+
+    const stats = {
+      totalGroups: groups.length,
+      totalClients: 0,
+      mandatoryClients: 0,
+      optionalClients: 0,
+      locations: new Set(),
+      averageGroupSize: 0,
+      locationBreakdown: {}
+    };
+
+    groups.forEach(group => {
+      stats.locations.add(group.location);
+      
+      if (!stats.locationBreakdown[group.location]) {
+        stats.locationBreakdown[group.location] = {
+          groups: 0,
+          clients: 0,
+          mandatory: 0,
+          optional: 0
+        };
+      }
+      
+      stats.locationBreakdown[group.location].groups++;
+      
+      group.groupClients.forEach(gc => {
+        stats.totalClients++;
+        stats.locationBreakdown[group.location].clients++;
+        
+        if (gc.type === 'MANDATORY') {
+          stats.mandatoryClients++;
+          stats.locationBreakdown[group.location].mandatory++;
+        } else {
+          stats.optionalClients++;
+          stats.locationBreakdown[group.location].optional++;
+        }
+      });
+    });
+
+    stats.locations = Array.from(stats.locations);
+    stats.averageGroupSize = stats.totalGroups > 0 ? (stats.totalClients / stats.totalGroups).toFixed(1) : 0;
+
+    res.json(stats);
+
+  } catch (error) {
+    console.error('Get group statistics error:', error);
+    res.status(500).json({ error: 'Failed to get group statistics' });
+  }
+});
+
+// Add client to group
+app.post('/api/projects/:id/client-groups/:groupId/clients', authenticateToken, checkProjectAccess, async (req, res) => {
+  try {
+    if (req.userPermission === 'VIEW') {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    const { groupId } = req.params;
+    const { clientId, type = 'OPTIONAL' } = req.body;
+
+    // Verify group belongs to project
+    const group = await prisma.clientGroup.findFirst({
+      where: {
+        id: groupId,
+        projectId: req.params.id
+      },
+      include: {
+        groupClients: true
+      }
+    });
+
+    if (!group) {
+      return res.status(404).json({ error: 'Client group not found' });
+    }
+
+    // Check if client is already in this group
+    const existingMember = group.groupClients.find(gc => gc.clientId === clientId);
+    if (existingMember) {
+      return res.status(400).json({ error: 'Client is already in this group' });
+    }
+
+    // Check capacity limits
+    const mandatoryCount = group.groupClients.filter(gc => gc.type === 'MANDATORY').length;
+    const optionalCount = group.groupClients.filter(gc => gc.type === 'OPTIONAL').length;
+
+    if (type === 'MANDATORY' && mandatoryCount >= group.maxMandatory) {
+      return res.status(400).json({ 
+        error: `Group already has maximum mandatory clients (${group.maxMandatory})` 
+      });
+    }
+
+    if (type === 'OPTIONAL' && optionalCount >= group.maxOptional) {
+      return res.status(400).json({ 
+        error: `Group already has maximum optional clients (${group.maxOptional})` 
+      });
+    }
+
+    // Calculate next priority
+    const maxPriority = Math.max(0, ...group.groupClients.map(gc => gc.priority));
+    const priority = maxPriority + 1;
+
+    // Add client to group
+    const groupClient = await prisma.groupClient.create({
+      data: {
+        clientId,
+        groupId,
+        type,
+        priority
+      },
+      include: {
+        client: true
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Client added to group successfully',
+      groupClient
+    });
+
+  } catch (error) {
+    console.error('Add client to group error:', error);
+    res.status(500).json({ error: 'Failed to add client to group' });
+  }
+});
+
+// Remove client from group
+app.delete('/api/projects/:id/client-groups/:groupId/clients/:clientId', authenticateToken, checkProjectAccess, async (req, res) => {
+  try {
+    if (req.userPermission === 'VIEW') {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    const { groupId, clientId } = req.params;
+
+    // Verify group belongs to project
+    const group = await prisma.clientGroup.findFirst({
+      where: {
+        id: groupId,
+        projectId: req.params.id
+      }
+    });
+
+    if (!group) {
+      return res.status(404).json({ error: 'Client group not found' });
+    }
+
+    // Remove client from group
+    const deletedGroupClient = await prisma.groupClient.deleteMany({
+      where: {
+        groupId,
+        clientId
+      }
+    });
+
+    if (deletedGroupClient.count === 0) {
+      return res.status(404).json({ error: 'Client not found in this group' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Client removed from group successfully'
+    });
+
+  } catch (error) {
+    console.error('Remove client from group error:', error);
+    res.status(500).json({ error: 'Failed to remove client from group' });
+  }
+});
 
 // ================================
 // ACTIVITY LOGS
