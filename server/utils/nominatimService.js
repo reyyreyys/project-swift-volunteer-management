@@ -5,7 +5,7 @@ const NOMINATIM_BASE_URL = 'https://nominatim.openstreetmap.org';
 
 // User-Agent is required for Nominatim API
 const headers = {
-  'User-Agent': 'YourAppName/1.0 (your-email@example.com)'
+  'User-Agent': 'YourAppName/1.0 (reyes_ng1260@yahoo.com)'
 };
 
 export const geocodeAddress = async (address) => {

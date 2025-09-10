@@ -22,7 +22,8 @@ const ClientManagementTab = ({ projectId, refreshKey, onImportComplete }) => {
   const [viewMode, setViewMode] = useState('grouped'); // 'grouped' or 'list'
   const [sortBy, setSortBy] = useState('location'); // 'location', 'name', 'srcId'
   const [filterByLocation, setFilterByLocation] = useState('');
-  
+  const [autoGroupingInProgress, setAutoGroupingInProgress] = useState(false);
+  const [useGeolocationGrouping, setUseGeolocationGrouping] = useState(false);
   // New state for inline group creation
   const [showGroupCreatorForLocation, setShowGroupCreatorForLocation] = useState(null);
   const [newGroupForm, setNewGroupForm] = useState({
@@ -161,29 +162,32 @@ const ClientManagementTab = ({ projectId, refreshKey, onImportComplete }) => {
   }, [groupedClients]);
 
 const handleAutoGroupClients = async () => {
-  if (!window.confirm('This will create optimized client groups (3 mandatory + 2 optional per group) based on location. Any existing groups will be cleared first. Continue?')) {
+  if (!window.confirm(`This will create optimized client groups using ${useGeolocationGrouping ? 'geolocation proximity' : 'location names'}. Any existing groups will be cleared first. Continue?`)) {
     return;
   }
+  
+  setAutoGroupingInProgress(true);
   
   try {
     const token = localStorage.getItem('token');
     
-    // The API endpoint already handles clearing existing groups and creating new ones
-    const response = await axios.post(`/projects/${projectId}/clients/auto-group-enhanced`, {}, {
+    const response = await axios.post(`/projects/${projectId}/clients/auto-group-enhanced`, {
+      useGeocoding: useGeolocationGrouping, // Pass the toggle state
+      maxDistance: 2 // You can also make this configurable
+    }, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
     
     if (response.data.success) {
-      // Reload both client data and groups
       await Promise.all([
         loadClientGroups(),
         loadProjectClients()
       ]);
       
-      // Show success message with details
       const { groupsCreated, clientsGrouped, locations } = response.data;
+      const method = useGeolocationGrouping ? 'geolocation proximity' : 'location names';
       alert(
-        `Auto-grouping completed successfully!\n\n` +
+        `Auto-grouping completed successfully using ${method}!\n\n` +
         `• Created ${groupsCreated} groups\n` +
         `• Grouped ${clientsGrouped} clients\n` +
         `• Across ${locations} locations\n\n` +
@@ -194,8 +198,12 @@ const handleAutoGroupClients = async () => {
     console.error('Error auto-grouping clients:', error);
     const errorMessage = error.response?.data?.error || 'Failed to create client groups';
     alert(`Auto-grouping failed: ${errorMessage}`);
+  } finally {
+    setAutoGroupingInProgress(false);
   }
 };
+
+
 
 
   const handleDeleteGroup = async (groupId) => {
@@ -549,8 +557,40 @@ const handleAutoGroupClients = async () => {
   const totalGroups = clientGroups.length;
   const totalLocations = Object.keys(groupedClients).length;
 
-  return (
+return (
     <div className="clients-tab">
+      
+      {/* Auto-grouping Loading Modal */}
+      {autoGroupingInProgress && (
+        <div className="modal-overlay" style={{ zIndex: 9999 }}>
+          <div className="modal">
+            <div className="modal-header">
+              <h2>
+                <Settings />
+                Auto-Generating Groups
+              </h2>
+            </div>
+            <div className="modal-form" style={{ textAlign: 'center', padding: '2rem' }}>
+              <div className="spinner" style={{ 
+                margin: '0 auto 1rem auto', 
+                width: '40px', 
+                height: '40px',
+                border: '4px solid #f3f3f3',
+                borderTop: '4px solid #3498db',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite'
+              }}></div>
+              <p style={{ fontSize: '1.1rem', color: '#2d3748' }}>
+                Creating optimized client groups based on location...
+              </p>
+              <p style={{ fontSize: '0.9rem', color: '#718096', marginTop: '0.5rem' }}>
+                This may take a few moments depending on the number of clients.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* Enhanced Header with Statistics */}
       <div className="clients-header">
         <div>
@@ -574,15 +614,45 @@ const handleAutoGroupClients = async () => {
           
           {totalClients > 0 && (
             <>
-              <button
-                onClick={handleAutoGroupClients}
-                className="group-clients-btn"
-                disabled={loading}
-              >
-                <Settings />
-                Auto Group All
-              </button>
-              
+            {/* Add this before your Auto Group All button */}
+            <div className="grouping-method-selector" style={{ marginBottom: '1rem', padding: '1rem', backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
+              <h4 style={{ marginBottom: '0.5rem', fontSize: '1rem' }}>Grouping Method</h4>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={useGeolocationGrouping}
+                  onChange={(e) => setUseGeolocationGrouping(e.target.checked)}
+                  style={{ marginRight: '0.5rem' }}
+                />
+                <span>Use GPS/Geolocation-based grouping</span>
+              </label>
+              <div style={{ fontSize: '0.875rem', color: '#6c757d', marginTop: '0.25rem' }}>
+                {useGeolocationGrouping 
+                  ? "Groups clients based on geographic proximity using address coordinates" 
+                  : "Groups clients based on their assigned location names (Central, East, West, etc.)"
+                }
+              </div>
+            </div>
+
+            {/* Your existing Auto Group All button */}
+            <button
+              onClick={handleAutoGroupClients}
+              className="group-clients-btn"
+              disabled={loading || autoGroupingInProgress}
+            >
+              {autoGroupingInProgress ? (
+                <>
+                  <div className="spinner-small"></div>
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Settings />
+                  Auto Group All ({useGeolocationGrouping ? 'GPS' : 'Location'})
+                </>
+              )}
+            </button>
+
               {totalGroups > 0 && (
                 <button
                   onClick={handleDeleteAllGroups}
@@ -605,6 +675,7 @@ const handleAutoGroupClients = async () => {
           )}
         </div>
       </div>
+
 
       {/* Enhanced Filters Section */}
       <div className="filters-section">

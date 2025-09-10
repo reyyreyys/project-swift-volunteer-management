@@ -2394,7 +2394,85 @@ app.get('/api/projects/:id/client-groups', authenticateToken, checkProjectAccess
 // Add to your server.js
 const { geocodeAddress } = require('./utils/nominatimService');
 
-// Enhanced auto-group with geocoding
+// Add these functions to your server.js file
+function groupClientsByProximity(clients, maxDistanceKm) {
+  const groups = [];
+  const used = new Set();
+
+  for (let i = 0; i < clients.length; i++) {
+    if (used.has(i) || !clients[i].coordinates) continue;
+
+    const group = [clients[i]];
+    used.add(i);
+
+    for (let j = i + 1; j < clients.length; j++) {
+      if (used.has(j) || !clients[j].coordinates) continue;
+
+      const distance = calculateDistance(
+        clients[i].coordinates.lat,
+        clients[i].coordinates.lon,
+        clients[j].coordinates.lat,
+        clients[j].coordinates.lon
+      );
+
+      if (distance <= maxDistanceKm) {
+        group.push(clients[j]);
+        used.add(j);
+      }
+    }
+
+    groups.push(group);
+  }
+
+  return groups;
+}
+
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371; // Radius of the Earth in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c; // Distance in km
+}
+
+// Modified clustering function that respects location boundaries
+function clusterClientsByLocationAndProximity(clients, maxDistanceKm) {
+  const locationGroups = new Map();
+
+  // First, group all clients by their location field
+  clients.forEach(client => {
+    const location = client.location || 'Unknown Location';
+    if (!locationGroups.has(location)) {
+      locationGroups.set(location, []);
+    }
+    locationGroups.get(location).push(client);
+  });
+
+  const allClusters = [];
+  
+  // Then, within each location, apply proximity clustering
+  for (const [locationName, clientsInLocation] of locationGroups.entries()) {
+    if (clientsInLocation.length === 0) continue;
+    
+    // Use your existing proximity clustering function within this location
+    const proximityClusters = groupClientsByProximity(clientsInLocation, maxDistanceKm);
+    
+    // Add location information to each cluster
+    proximityClusters.forEach((cluster, index) => {
+      cluster.locationName = locationName;
+      cluster.clusterIndex = index + 1;
+    });
+    
+    allClusters.push(...proximityClusters);
+  }
+
+  return allClusters;
+}
+
 app.post('/api/projects/:id/clients/auto-group-enhanced', authenticateToken, checkProjectAccess, async (req, res) => {
   try {
     if (req.userPermission === 'VIEW') {
@@ -2402,8 +2480,7 @@ app.post('/api/projects/:id/clients/auto-group-enhanced', authenticateToken, che
     }
 
     const projectId = req.params.id;
-    console.log("autogroup started "+ projectId)
-    const { useGeocoding = true, maxDistance = 2 } = req.body; // Default to location-based
+    const { useGeocoding = true, maxDistance = 2 } = req.body;
 
     const projectClients = await prisma.projectClient.findMany({
       where: { projectId },
@@ -2425,53 +2502,58 @@ app.post('/api/projects/:id/clients/auto-group-enhanced', authenticateToken, che
     let locationsProcessed = 0;
 
     if (useGeocoding) {
-      // Geocoding path (existing code)
-      let clientsWithCoordinates = [];
+      console.log("Using location-aware geocoding");
       
+      let clientsWithCoordinates = [];
       for (const pc of projectClients) {
         const coordinates = await geocodeAddress(pc.client.address);
         clientsWithCoordinates.push({
           ...pc.client,
           coordinates
         });
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 1100)); // Rate limiting
       }
 
-      const proximityGroups = groupClientsByProximity(clientsWithCoordinates, maxDistance);
+      // Use location-first clustering
+      const locationClusters = clusterClientsByLocationAndProximity(clientsWithCoordinates, maxDistance);
       
-      for (let i = 0; i < proximityGroups.length; i++) {
-        const group = proximityGroups[i];
-        const locationName = `Cluster ${i + 1}`;
+      for (const cluster of locationClusters) {
+        const locationName = cluster.locationName;
+        const groupName = cluster.length > 1 
+          ? `${locationName} - Group ${cluster.clusterIndex}` 
+          : `${locationName} - Solo`;
         
         const dbGroup = await prisma.clientGroup.create({
           data: {
-            name: `${locationName} (${group.length} clients)`,
-            location: locationName,
-            groupNumber: i + 1,
+            name: groupName,
+            location: locationName, // Use the actual location name
+            groupNumber: cluster.clusterIndex,
             projectId,
-            maxMandatory: Math.min(3, group.length),
-            maxOptional: Math.max(0, group.length - 3)
+            maxMandatory: Math.min(3, cluster.length),
+            maxOptional: Math.max(0, cluster.length - 3)
           }
         });
 
-        for (let j = 0; j < group.length; j++) {
+        // Add clients to the group
+        for (let j = 0; j < cluster.length; j++) {
           await prisma.groupClient.create({
             data: {
-              clientId: group[j].id,
+              clientId: cluster[j].id,
               groupId: dbGroup.id,
               type: j < 3 ? 'MANDATORY' : 'OPTIONAL',
               priority: j + 1
             }
           });
         }
-        totalClientsGrouped += group.length;
+        
+        totalClientsGrouped += cluster.length;
+        totalGroupsCreated++;
       }
       
-      totalGroupsCreated = proximityGroups.length;
-      locationsProcessed = 1; // All clients in proximity groups
+      locationsProcessed = new Set(locationClusters.map(c => c.locationName)).size;
 
     } else {
-      // Location-based grouping (FIXED - now saves to database)
+           // Location-based grouping (FIXED - now saves to database)
       const locationGroups = {};
       projectClients.forEach(pc => {
         const location = pc.client.location || 'Unknown';
@@ -2517,7 +2599,6 @@ app.post('/api/projects/:id/clients/auto-group-enhanced', authenticateToken, che
       }
     }
 
-    // Consistent response format
     res.json({
       success: true,
       groupsCreated: totalGroupsCreated,
