@@ -321,15 +321,25 @@ app.delete('/api/projects/:id/volunteers', authenticateToken, checkProjectAccess
     // Filter to get volunteers who are only in this project AND filter out undefined values
     const volunteerIdsToCompletelyDelete = volunteersOnlyInThisProject
       .filter(pv => pv.volunteer.projectVolunteers.length === 1)
-      .map(pv => pv.volunteerId) // ✅ Fixed: Use 'volunteerId' not 'volunteer_id'
-      .filter(id => id != null); // ✅ Fixed: Filter out undefined/null values
+      .map(pv => pv.volunteerId)
+      .filter(id => id != null);
 
-    // Step 2: Delete all project-volunteer relationships for this project first
+    // Step 2: Delete volunteer pairs for this project FIRST
+    const deletedPairsResult = await prisma.volunteerPair.deleteMany({
+      where: { projectId: projectId }
+    });
+
+    // Step 3: Delete assignments for this project (if any reference volunteer pairs)
+    const deletedAssignmentsResult = await prisma.assignment.deleteMany({
+      where: { projectId: projectId }
+    });
+
+    // Step 4: Delete all project-volunteer relationships for this project
     const projectVolunteerResult = await prisma.projectVolunteer.deleteMany({
       where: { projectId: projectId }
     });
 
-    // Step 3: Delete volunteers that were only in this project (only if we have valid IDs)
+    // Step 5: Delete volunteers that were only in this project (only if we have valid IDs)
     let deletedVolunteersResult = { count: 0 };
     if (volunteerIdsToCompletelyDelete.length > 0) {
       console.log('Deleting volunteers with IDs:', volunteerIdsToCompletelyDelete); // Debug log
@@ -343,7 +353,7 @@ app.delete('/api/projects/:id/volunteers', authenticateToken, checkProjectAccess
       });
     }
 
-    // Step 4: Log the action
+    // Step 6: Log the action
     await prisma.activityLog.create({
       data: {
         userId: req.user.userId,
@@ -352,6 +362,8 @@ app.delete('/api/projects/:id/volunteers', authenticateToken, checkProjectAccess
         details: { 
           removedFromProject: projectVolunteerResult.count,
           completelyDeleted: deletedVolunteersResult.count,
+          deletedPairs: deletedPairsResult.count,
+          deletedAssignments: deletedAssignmentsResult.count,
           volunteerIdsDeleted: volunteerIdsToCompletelyDelete
         }
       }
@@ -359,9 +371,11 @@ app.delete('/api/projects/:id/volunteers', authenticateToken, checkProjectAccess
 
     res.json({ 
       success: true, 
-      message: `Cleared ${projectVolunteerResult.count} volunteers from project. ${deletedVolunteersResult.count} volunteers were completely deleted as they were only in this project.`,
+      message: `Cleared ${projectVolunteerResult.count} volunteers from project. ${deletedVolunteersResult.count} volunteers were completely deleted as they were only in this project. Also removed ${deletedPairsResult.count} pairs and ${deletedAssignmentsResult.count} assignments.`,
       removedFromProject: projectVolunteerResult.count,
-      completelyDeleted: deletedVolunteersResult.count
+      completelyDeleted: deletedVolunteersResult.count,
+      deletedPairs: deletedPairsResult.count,
+      deletedAssignments: deletedAssignmentsResult.count
     });
 
   } catch (error) {
@@ -373,6 +387,7 @@ app.delete('/api/projects/:id/volunteers', authenticateToken, checkProjectAccess
     });
   }
 });
+
 
 
 // Get volunteers for a specific project with calculated experience based on other projects
@@ -1741,6 +1756,106 @@ app.get('/api/projects/:id/assignments', authenticateToken, checkProjectAccess, 
   } catch (error) {
     console.error('Get assignments error:', error);
     res.status(500).json({ error: 'Failed to get assignments' });
+  }
+});
+
+// DELETE /api/projects/:id/assignments/:assignmentId - Delete a specific assignment
+app.delete('/api/projects/:id/assignments/:assignmentId', authenticateToken, checkProjectAccess, async (req, res) => {
+  try {
+    if (req.userPermission === 'VIEW') {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    const { assignmentId } = req.params;
+    const projectId = req.params.id;
+
+    // Verify assignment belongs to this project
+    const existingAssignment = await prisma.assignment.findFirst({
+      where: {
+        id: assignmentId,
+        projectId: projectId
+      },
+      include: {
+        client: true,
+        volunteerPair: {
+          include: {
+            volunteer1: true,
+            volunteer2: true
+          }
+        }
+      }
+    });
+
+    if (!existingAssignment) {
+      return res.status(404).json({ error: 'Assignment not found' });
+    }
+
+    // Delete the assignment
+    await prisma.assignment.delete({
+      where: { id: assignmentId }
+    });
+
+    // Log activity
+    await prisma.activityLog.create({
+      data: {
+        userId: req.user.userId,
+        projectId: projectId,
+        action: 'deleted_assignment',
+        details: {
+          assignmentId: assignmentId,
+          clientName: existingAssignment.client.name,
+          volunteerPair: `${existingAssignment.volunteerPair.volunteer1.firstName} ${existingAssignment.volunteerPair.volunteer1.lastName} & ${existingAssignment.volunteerPair.volunteer2.firstName} ${existingAssignment.volunteerPair.volunteer2.lastName}`
+        }
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Assignment removed successfully'
+    });
+
+  } catch (error) {
+    console.error('Delete assignment error:', error);
+    res.status(500).json({ error: 'Failed to delete assignment' });
+  }
+});
+
+// PATCH /api/projects/:id/assignments/:assignmentId - Update assignment (optional)
+app.patch('/api/projects/:id/assignments/:assignmentId', authenticateToken, checkProjectAccess, async (req, res) => {
+  try {
+    if (req.userPermission === 'VIEW') {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    const { assignmentId } = req.params;
+    const { volunteerPairId, notes, status } = req.body;
+
+    const updatedAssignment = await prisma.assignment.update({
+      where: { id: assignmentId },
+      data: {
+        ...(volunteerPairId && { volunteerPairId }),
+        ...(notes && { notes }),
+        ...(status && { status })
+      },
+      include: {
+        client: true,
+        volunteerPair: {
+          include: {
+            volunteer1: true,
+            volunteer2: true
+          }
+        }
+      }
+    });
+
+    res.json({
+      success: true,
+      assignment: updatedAssignment
+    });
+
+  } catch (error) {
+    console.error('Update assignment error:', error);
+    res.status(500).json({ error: 'Failed to update assignment' });
   }
 });
 
