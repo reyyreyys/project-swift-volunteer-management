@@ -4184,3 +4184,21 @@ body {
   font-size: 1.125rem;
   margin-bottom: 0.5rem;
 }
+
+/* Make client management styles more specific */
+.client-management-container .location-clients-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 1rem;
+  padding-left: 1rem;
+  margin-bottom: 2rem;
+}
+
+.client-management-container .client-card {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  transition: all 0.2s ease;
+}

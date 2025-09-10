@@ -1,6 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
-import { MapPin, Users, Upload, Search, Trash2, AlertTriangle, BarChart3, Plus, Settings, Grid, List, ChevronDown, ChevronRight, Edit, Save, X } from 'lucide-react';
+import { 
+  MapPin, Users, Upload, Search, Trash2, AlertTriangle, BarChart3, 
+  Plus, Settings, Grid, List, ChevronDown, ChevronRight, Edit, Save, X,
+  UserCheck, UserMinus, Building, Globe, ChevronUp
+} from 'lucide-react';
 import ClientCSVImporter from './ClientCSVImporter';
 
 const ClientManagementTab = ({ projectId, refreshKey, onImportComplete }) => {
@@ -15,6 +19,9 @@ const ClientManagementTab = ({ projectId, refreshKey, onImportComplete }) => {
   const [removingAll, setRemovingAll] = useState(false);
   const [expandedLocations, setExpandedLocations] = useState({});
   const [expandedGroups, setExpandedGroups] = useState({});
+  const [viewMode, setViewMode] = useState('grouped'); // 'grouped' or 'list'
+  const [sortBy, setSortBy] = useState('location'); // 'location', 'name', 'srcId'
+  const [filterByLocation, setFilterByLocation] = useState('');
   
   // New state for inline group creation
   const [showGroupCreatorForLocation, setShowGroupCreatorForLocation] = useState(null);
@@ -26,13 +33,10 @@ const ClientManagementTab = ({ projectId, refreshKey, onImportComplete }) => {
   });
   const [editingGroup, setEditingGroup] = useState(null);
   const [creatingGroup, setCreatingGroup] = useState(false);
+  const [errors, setErrors] = useState({});
 
-  useEffect(() => {
-    loadProjectClients();
-    loadClientGroups();
-  }, [projectId, refreshKey]);
-
-  const loadProjectClients = async () => {
+  // Load data with useCallback to prevent unnecessary re-renders
+  const loadProjectClients = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
       const response = await axios.get(`/projects/${projectId}/clients`, {
@@ -56,24 +60,35 @@ const ClientManagementTab = ({ projectId, refreshKey, onImportComplete }) => {
         const languages = [...new Set(clients.map(pc => pc.client.languages).filter(Boolean))];
         const races = [...new Set(clients.map(pc => pc.client.race).filter(Boolean))];
         const genders = [...new Set(clients.map(pc => pc.client.gender).filter(Boolean))];
-        stats[location] = { total: clients.length, languages, races, genders };
+        stats[location] = { 
+          total: clients.length, 
+          languages: languages.length, 
+          races: races.length, 
+          genders: genders.length,
+          languageList: languages,
+          raceList: races,
+          genderList: genders
+        };
       });
       setLocationStats(stats);
 
-      // Auto-expand all locations initially
-      const initialExpanded = {};
-      Object.keys(grouped).forEach(location => {
-        initialExpanded[location] = true;
-      });
-      setExpandedLocations(initialExpanded);
+      // Auto-expand all locations initially (only on first load)
+      if (Object.keys(expandedLocations).length === 0) {
+        const initialExpanded = {};
+        Object.keys(grouped).forEach(location => {
+          initialExpanded[location] = true;
+        });
+        setExpandedLocations(initialExpanded);
+      }
     } catch (error) {
       console.error('Error loading project clients:', error);
+      setErrors(prev => ({ ...prev, loadClients: error.message }));
     } finally {
       setLoading(false);
     }
-  };
+  }, [projectId, expandedLocations]);
 
-  const loadClientGroups = async () => {
+  const loadClientGroups = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
       const response = await axios.get(`/projects/${projectId}/client-groups`, {
@@ -81,49 +96,123 @@ const ClientManagementTab = ({ projectId, refreshKey, onImportComplete }) => {
       });
       setClientGroups(response.data);
 
-      // Auto-expand all groups initially
-      const initialExpanded = {};
-      response.data.forEach(group => {
-        initialExpanded[group.id] = true;
-      });
-      setExpandedGroups(initialExpanded);
-    } catch (error) {
-      console.error('Error loading client groups:', error);
-    }
-  };
-
-  const handleAutoGroupClients = async () => {
-    if (!window.confirm('This will create new groups and may replace existing ones. Continue?')) {
-      return;
-    }
-    try {
-      const token = localStorage.getItem('token');
-      const response = await axios.post(`/projects/${projectId}/clients/auto-group`, {}, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.data.success) {
-        await loadClientGroups();
-        alert(`Successfully created ${response.data.groups.length} client groups`);
+      // Auto-expand all groups initially (only on first load)
+      if (Object.keys(expandedGroups).length === 0) {
+        const initialExpanded = {};
+        response.data.forEach(group => {
+          initialExpanded[group.id] = true;
+        });
+        setExpandedGroups(initialExpanded);
       }
     } catch (error) {
-      console.error('Error auto-grouping clients:', error);
-      alert('Failed to create client groups');
+      console.error('Error loading client groups:', error);
+      setErrors(prev => ({ ...prev, loadGroups: error.message }));
     }
-  };
+  }, [projectId, expandedGroups]);
+
+  useEffect(() => {
+    loadProjectClients();
+    loadClientGroups();
+  }, [projectId, refreshKey, loadProjectClients, loadClientGroups]);
+
+  // Memoized filtered and sorted clients
+  const filteredAndSortedClients = useMemo(() => {
+    let filtered = Object.entries(groupedClients);
+    
+    // Filter by search term
+    if (searchTerm) {
+      filtered = filtered.map(([location, clients]) => {
+        const filteredClients = clients.filter(pc =>
+          pc.client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          pc.client.location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          pc.client.srcId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          pc.client.address?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          pc.client.languages?.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+        return [location, filteredClients];
+      }).filter(([, clients]) => clients.length > 0);
+    }
+
+    // Filter by location
+    if (filterByLocation) {
+      filtered = filtered.filter(([location]) => 
+        location.toLowerCase().includes(filterByLocation.toLowerCase())
+      );
+    }
+
+    // Sort locations
+    filtered.sort(([locationA], [locationB]) => {
+      switch (sortBy) {
+        case 'name':
+          return locationA.localeCompare(locationB);
+        case 'count':
+          return groupedClients[locationB]?.length - groupedClients[locationA]?.length;
+        default:
+          return locationA.localeCompare(locationB);
+      }
+    });
+
+    return Object.fromEntries(filtered);
+  }, [groupedClients, searchTerm, filterByLocation, sortBy]);
+
+  // Get unique locations for filter dropdown
+  const uniqueLocations = useMemo(() => {
+    return Object.keys(groupedClients).sort();
+  }, [groupedClients]);
+
+const handleAutoGroupClients = async () => {
+  if (!window.confirm('This will create optimized client groups (3 mandatory + 2 optional per group) based on location. Any existing groups will be cleared first. Continue?')) {
+    return;
+  }
+  
+  try {
+    const token = localStorage.getItem('token');
+    
+    // The API endpoint already handles clearing existing groups and creating new ones
+    const response = await axios.post(`/projects/${projectId}/clients/auto-group-enhanced`, {}, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    
+    if (response.data.success) {
+      // Reload both client data and groups
+      await Promise.all([
+        loadClientGroups(),
+        loadProjectClients()
+      ]);
+      
+      // Show success message with details
+      const { groupsCreated, clientsGrouped, locations } = response.data;
+      alert(
+        `Auto-grouping completed successfully!\n\n` +
+        `• Created ${groupsCreated} groups\n` +
+        `• Grouped ${clientsGrouped} clients\n` +
+        `• Across ${locations} locations\n\n` +
+        `Groups follow the 3 mandatory + 2 optional structure.`
+      );
+    }
+  } catch (error) {
+    console.error('Error auto-grouping clients:', error);
+    const errorMessage = error.response?.data?.error || 'Failed to create client groups';
+    alert(`Auto-grouping failed: ${errorMessage}`);
+  }
+};
+
 
   const handleDeleteGroup = async (groupId) => {
     if (!window.confirm('Are you sure you want to delete this client group?')) {
       return;
     }
+    
     try {
       const token = localStorage.getItem('token');
       await axios.delete(`/projects/${projectId}/client-groups/${groupId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       loadClientGroups();
+      alert('Group deleted successfully');
     } catch (error) {
       console.error('Error deleting group:', error);
-      alert('Failed to delete client group');
+      alert(error.response?.data?.error || 'Failed to delete client group');
     }
   };
 
@@ -131,18 +220,20 @@ const ClientManagementTab = ({ projectId, refreshKey, onImportComplete }) => {
     if (!window.confirm('Are you sure you want to delete ALL client groups? This cannot be undone.')) {
       return;
     }
+    
     try {
       const token = localStorage.getItem('token');
       const response = await axios.delete(`/projects/${projectId}/client-groups/all`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
+      
       if (response.data.success) {
         loadClientGroups();
         alert(response.data.message);
       }
     } catch (error) {
       console.error('Error deleting all groups:', error);
-      alert('Failed to delete all client groups');
+      alert(error.response?.data?.error || 'Failed to delete all client groups');
     }
   };
 
@@ -155,6 +246,7 @@ const ClientManagementTab = ({ projectId, refreshKey, onImportComplete }) => {
     });
     setEditingGroup(null);
     setShowGroupCreatorForLocation(location);
+    setErrors({});
   };
 
   const openGroupEditor = (group) => {
@@ -173,26 +265,34 @@ const ClientManagementTab = ({ projectId, refreshKey, onImportComplete }) => {
     });
     setEditingGroup(group);
     setShowGroupCreatorForLocation(group.location);
+    setErrors({});
+  };
+
+  const validateGroupForm = () => {
+    const newErrors = {};
+    
+    if (!newGroupForm.name.trim()) {
+      newErrors.name = 'Group name is required';
+    }
+    
+    if (newGroupForm.mandatoryClients.length === 0) {
+      newErrors.mandatory = 'At least one mandatory client is required';
+    }
+    
+    if (newGroupForm.mandatoryClients.length > 3) {
+      newErrors.mandatory = 'Maximum 3 mandatory clients allowed';
+    }
+    
+    if (newGroupForm.optionalClients.length > 2) {
+      newErrors.optional = 'Maximum 2 optional clients allowed';
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleCreateOrUpdateGroup = async () => {
-    if (!newGroupForm.name.trim()) {
-      alert('Please provide a group name');
-      return;
-    }
-
-    if (newGroupForm.mandatoryClients.length === 0) {
-      alert('Please select at least one mandatory client');
-      return;
-    }
-
-    if (newGroupForm.mandatoryClients.length > 3) {
-      alert('Maximum 3 mandatory clients allowed');
-      return;
-    }
-
-    if (newGroupForm.optionalClients.length > 2) {
-      alert('Maximum 2 optional clients allowed');
+    if (!validateGroupForm()) {
       return;
     }
 
@@ -227,6 +327,12 @@ const ClientManagementTab = ({ projectId, refreshKey, onImportComplete }) => {
       }
 
       setShowGroupCreatorForLocation(null);
+      setNewGroupForm({
+        name: '',
+        location: '',
+        mandatoryClients: [],
+        optionalClients: []
+      });
       loadClientGroups();
     } catch (error) {
       console.error('Error creating/updating group:', error);
@@ -237,16 +343,20 @@ const ClientManagementTab = ({ projectId, refreshKey, onImportComplete }) => {
   };
 
   const addClientToGroup = (client, type) => {
+    const isInMandatory = newGroupForm.mandatoryClients.find(c => c.id === client.id);
+    const isInOptional = newGroupForm.optionalClients.find(c => c.id === client.id);
+
     if (type === 'mandatory') {
       if (newGroupForm.mandatoryClients.length >= 3) {
         alert('Maximum 3 mandatory clients allowed');
         return;
       }
-      if (newGroupForm.mandatoryClients.find(c => c.id === client.id)) {
+      if (isInMandatory) {
         alert('Client already added as mandatory');
         return;
       }
-      // Remove from optional if exists
+      
+      // Remove from optional if exists and add to mandatory
       const updatedOptional = newGroupForm.optionalClients.filter(c => c.id !== client.id);
       setNewGroupForm(prev => ({
         ...prev,
@@ -258,17 +368,28 @@ const ClientManagementTab = ({ projectId, refreshKey, onImportComplete }) => {
         alert('Maximum 2 optional clients allowed');
         return;
       }
-      if (newGroupForm.optionalClients.find(c => c.id === client.id)) {
+      if (isInOptional) {
         alert('Client already added as optional');
         return;
       }
-      // Remove from mandatory if exists
+      
+      // Remove from mandatory if exists and add to optional
       const updatedMandatory = newGroupForm.mandatoryClients.filter(c => c.id !== client.id);
       setNewGroupForm(prev => ({
         ...prev,
         optionalClients: [...prev.optionalClients, client],
         mandatoryClients: updatedMandatory
       }));
+    }
+    
+    // Clear validation errors when adding clients
+    if (errors.mandatory || errors.optional) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors.mandatory;
+        delete newErrors.optional;
+        return newErrors;
+      });
     }
   };
 
@@ -287,7 +408,7 @@ const ClientManagementTab = ({ projectId, refreshKey, onImportComplete }) => {
   };
 
   // Get clients available for grouping (not already in a group for this location)
-  const getAvailableClientsForLocation = (location) => {
+  const getAvailableClientsForLocation = useCallback((location) => {
     const locationClients = groupedClients[location] || [];
     const groupedClientIds = new Set();
     
@@ -309,16 +430,19 @@ const ClientManagementTab = ({ projectId, refreshKey, onImportComplete }) => {
     
     return locationClients
       .map(pc => pc.client)
-      .filter(client => !groupedClientIds.has(client.id));
-  };
+      .filter(client => !groupedClientIds.has(client.id))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [groupedClients, clientGroups, editingGroup]);
 
   // Get groups for a specific location
-  const getGroupsForLocation = (location) => {
-    return clientGroups.filter(group => group.location === location);
-  };
+  const getGroupsForLocation = useCallback((location) => {
+    return clientGroups
+      .filter(group => group.location === location)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [clientGroups]);
 
   // Get ungrouped clients for a location
-  const getUngroupedClientsForLocation = (location) => {
+  const getUngroupedClientsForLocation = useCallback((location) => {
     const locationClients = groupedClients[location] || [];
     const groupedClientIds = new Set();
     
@@ -330,8 +454,10 @@ const ClientManagementTab = ({ projectId, refreshKey, onImportComplete }) => {
         });
       });
     
-    return locationClients.filter(pc => !groupedClientIds.has(pc.client.id));
-  };
+    return locationClients
+      .filter(pc => !groupedClientIds.has(pc.client.id))
+      .sort((a, b) => a.client.name.localeCompare(b.client.name));
+  }, [groupedClients, clientGroups]);
 
   const toggleLocationExpansion = (location) => {
     setExpandedLocations(prev => ({
@@ -347,6 +473,15 @@ const ClientManagementTab = ({ projectId, refreshKey, onImportComplete }) => {
     }));
   };
 
+  const toggleAllLocations = () => {
+    const allExpanded = Object.values(expandedLocations).every(Boolean);
+    const newState = {};
+    Object.keys(filteredAndSortedClients).forEach(location => {
+      newState[location] = !allExpanded;
+    });
+    setExpandedLocations(newState);
+  };
+
   const handleImportComplete = (result) => {
     loadProjectClients();
     setShowImporter(false);
@@ -359,6 +494,7 @@ const ClientManagementTab = ({ projectId, refreshKey, onImportComplete }) => {
     if (!window.confirm('Are you sure you want to remove this client from the project?')) {
       return;
     }
+    
     try {
       const token = localStorage.getItem('token');
       await axios.delete(`/project-clients/${projectClientId}`, {
@@ -366,9 +502,10 @@ const ClientManagementTab = ({ projectId, refreshKey, onImportComplete }) => {
       });
       loadProjectClients();
       loadClientGroups();
+      alert('Client removed successfully');
     } catch (error) {
       console.error('Error removing client:', error);
-      alert('Failed to remove client from project');
+      alert(error.response?.data?.error || 'Failed to remove client from project');
     }
   };
 
@@ -379,6 +516,7 @@ const ClientManagementTab = ({ projectId, refreshKey, onImportComplete }) => {
       const response = await axios.delete(`/projects/${projectId}/clients`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
+      
       if (response.data.success) {
         loadProjectClients();
         loadClientGroups();
@@ -393,20 +531,10 @@ const ClientManagementTab = ({ projectId, refreshKey, onImportComplete }) => {
     }
   };
 
-  // Filter clients based on search term
-  const filteredGroupedClients = Object.entries(groupedClients).reduce((acc, [location, clients]) => {
-    const filteredClients = clients.filter(pc =>
-      pc.client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      pc.client.location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      pc.client.srcId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      pc.client.address?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      pc.client.languages?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-    if (filteredClients.length > 0) {
-      acc[location] = filteredClients;
-    }
-    return acc;
-  }, {});
+  const clearSearch = () => {
+    setSearchTerm('');
+    setFilterByLocation('');
+  };
 
   if (loading) {
     return (
@@ -417,17 +545,21 @@ const ClientManagementTab = ({ projectId, refreshKey, onImportComplete }) => {
     );
   }
 
+  const totalClients = projectClients.length;
+  const totalGroups = clientGroups.length;
+  const totalLocations = Object.keys(groupedClients).length;
+
   return (
     <div className="clients-tab">
-      {/* Header with Controls */}
+      {/* Enhanced Header with Statistics */}
       <div className="clients-header">
         <div>
           <h3>
             <Users />
-            Client Management ({projectClients.length})
-            {clientGroups.length > 0 && (
-              <span className="stat-subtitle">{clientGroups.length} Groups</span>
-            )}
+            Client Management ({totalClients})
+            <span className="stat-subtitle">
+              {totalLocations} Locations • {totalGroups} Groups
+            </span>
           </h3>
         </div>
 
@@ -440,17 +572,18 @@ const ClientManagementTab = ({ projectId, refreshKey, onImportComplete }) => {
             Import CSV
           </button>
           
-          {projectClients.length > 0 && (
+          {totalClients > 0 && (
             <>
               <button
                 onClick={handleAutoGroupClients}
                 className="group-clients-btn"
+                disabled={loading}
               >
                 <Settings />
                 Auto Group All
               </button>
               
-              {clientGroups.length > 0 && (
+              {totalGroups > 0 && (
                 <button
                   onClick={handleDeleteAllGroups}
                   className="group-clients-btn"
@@ -473,29 +606,89 @@ const ClientManagementTab = ({ projectId, refreshKey, onImportComplete }) => {
         </div>
       </div>
 
-      {/* Search Bar */}
-      <div className="search-bar">
-        <Search />
-        <input
-          type="text"
-          placeholder="Search clients by name, location, SRC ID, address, or language..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
+      {/* Enhanced Filters Section */}
+      <div className="filters-section">
+        <div className="search-filter">
+          <Search />
+          <input
+            type="text"
+            placeholder="Search clients by name, location, SRC ID, address, or language..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          {(searchTerm || filterByLocation) && (
+            <button
+              onClick={clearSearch}
+              className="btn-icon"
+              style={{ position: 'absolute', right: '0.75rem', background: 'none', border: 'none' }}
+            >
+              <X />
+            </button>
+          )}
+        </div>
+
+        <div className="filter-controls">
+          <select
+            value={filterByLocation}
+            onChange={(e) => setFilterByLocation(e.target.value)}
+          >
+            <option value="">All Locations</option>
+            {uniqueLocations.map(location => (
+              <option key={location} value={location}>
+                {location} ({groupedClients[location]?.length || 0})
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+          >
+            <option value="location">Sort by Location</option>
+            <option value="count">Sort by Client Count</option>
+            <option value="name">Sort by Name</option>
+          </select>
+
+          <button
+            onClick={toggleAllLocations}
+            className="btn-icon"
+            title={Object.values(expandedLocations).every(Boolean) ? "Collapse All" : "Expand All"}
+          >
+            {Object.values(expandedLocations).every(Boolean) ? <ChevronUp /> : <ChevronDown />}
+          </button>
+
+          {Object.keys(filteredAndSortedClients).length > 0 && (
+            <div className="results-info">
+              Showing {Object.keys(filteredAndSortedClients).length} of {totalLocations} locations
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Location-based Client Display with Inline Groups */}
+      {/* Error Display */}
+      {Object.keys(errors).length > 0 && (
+        <div className="error-banner">
+          {Object.entries(errors).map(([key, error]) => (
+            <div key={key} className="error-message">
+              <AlertTriangle />
+              {error}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Location-based Client Display with Enhanced Groups */}
       <div className="client-management-container">
-        {Object.keys(filteredGroupedClients).length === 0 ? (
+        {Object.keys(filteredAndSortedClients).length === 0 ? (
           <div className="empty-state">
             <Users className="empty-icon" />
             <h3 className="empty-title">
-              {projectClients.length === 0 
+              {totalClients === 0 
                 ? "Import clients from a CSV file to get started"
                 : "No clients match your search criteria"
               }
             </h3>
-            {projectClients.length === 0 && (
+            {totalClients === 0 && (
               <button
                 onClick={() => setShowImporter(true)}
                 className="create-first-btn"
@@ -504,11 +697,20 @@ const ClientManagementTab = ({ projectId, refreshKey, onImportComplete }) => {
                 Import Clients
               </button>
             )}
+            {totalClients > 0 && (
+              <button
+                onClick={clearSearch}
+                className="btn"
+              >
+                Clear Search
+              </button>
+            )}
           </div>
         ) : (
-          Object.entries(filteredGroupedClients).map(([location, clients]) => {
+          Object.entries(filteredAndSortedClients).map(([location, clients]) => {
             const locationGroups = getGroupsForLocation(location);
             const ungroupedClients = getUngroupedClientsForLocation(location);
+            const stats = locationStats[location] || {};
             
             return (
               <div key={location} className="location-group">
@@ -531,16 +733,21 @@ const ClientManagementTab = ({ projectId, refreshKey, onImportComplete }) => {
                         {locationGroups.length} groups
                       </span>
                     )}
+                    {ungroupedClients.length > 0 && (
+                      <span className="client-count" style={{ backgroundColor: '#f59e0b' }}>
+                        {ungroupedClients.length} ungrouped
+                      </span>
+                    )}
                   </div>
                   
                   <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    {locationStats[location] && (
-                      <div style={{ fontSize: '0.875rem', color: '#718096' }}>
-                        Languages: {locationStats[location].languages.length} | 
-                        Races: {locationStats[location].races.length} | 
-                        Genders: {locationStats[location].genders.length}
+                    <div className="location-stats-mini">
+                      <div style={{ fontSize: '0.875rem', color: '#718096', display: 'flex', gap: '1rem' }}>
+                        <span title="Languages">🗣️ {stats.languages || 0}</span>
+                        <span title="Races">👥 {stats.races || 0}</span>
+                        <span title="Genders">⚧ {stats.genders || 0}</span>
                       </div>
-                    )}
+                    </div>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -557,6 +764,28 @@ const ClientManagementTab = ({ projectId, refreshKey, onImportComplete }) => {
                 
                 {expandedLocations[location] && (
                   <div style={{ padding: '1rem', background: 'white' }}>
+                    {/* Enhanced Location Statistics */}
+                    {stats && (
+                      <div className="location-stats">
+                        <div className="location-stat">
+                          <div className="location-stat-number">{stats.total}</div>
+                          <div className="location-stat-label">Total Clients</div>
+                        </div>
+                        <div className="location-stat">
+                          <div className="location-stat-number">{locationGroups.length}</div>
+                          <div className="location-stat-label">Groups</div>
+                        </div>
+                        <div className="location-stat">
+                          <div className="location-stat-number">{ungroupedClients.length}</div>
+                          <div className="location-stat-label">Ungrouped</div>
+                        </div>
+                        <div className="location-stat">
+                          <div className="location-stat-number">{stats.languages}</div>
+                          <div className="location-stat-label">Languages</div>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Existing Groups for this Location */}
                     {locationGroups.map((group) => (
                       <div key={group.id} className="group-container">
@@ -574,9 +803,16 @@ const ClientManagementTab = ({ projectId, refreshKey, onImportComplete }) => {
                             <Grid />
                             <div className="group-info">
                               <div className="group-name">{group.name}</div>
-                              <div style={{ fontSize: '0.875rem', color: '#718096' }}>
-                                M: {group.groupClients.filter(gc => gc.type === 'MANDATORY').length}/3 | 
-                                O: {group.groupClients.filter(gc => gc.type === 'OPTIONAL').length}/2
+                              <div style={{ fontSize: '0.875rem', color: '#718096', display: 'flex', gap: '1rem' }}>
+                                <span className="mandatory-count">
+                                  M: {group.groupClients.filter(gc => gc.type === 'MANDATORY').length}/3
+                                </span>
+                                <span className="optional-count">
+                                  O: {group.groupClients.filter(gc => gc.type === 'OPTIONAL').length}/2
+                                </span>
+                                <span className="total-count">
+                                  Total: {group.groupClients.length}/5
+                                </span>
                               </div>
                             </div>
                           </div>
@@ -610,31 +846,50 @@ const ClientManagementTab = ({ projectId, refreshKey, onImportComplete }) => {
                             {/* Mandatory Clients */}
                             <div className="client-section">
                               <h6 className="section-title mandatory">
-                                <span style={{ width: '8px', height: '8px', backgroundColor: '#e53e3e', borderRadius: '50%', display: 'inline-block' }}></span>
+                                <UserCheck />
                                 Mandatory ({group.groupClients.filter(gc => gc.type === 'MANDATORY').length}/3)
                               </h6>
-                              <div className="clients-grid">
-                                {group.groupClients
-                                  .filter(gc => gc.type === 'MANDATORY')
-                                  .sort((a, b) => a.priority - b.priority)
-                                  .map((gc) => (
-                                    <div key={gc.id} className="client-card mandatory">
-                                      <div className="client-card-header">
-                                        <div className="client-name-section">
-                                          <h4>{gc.client.name}</h4>
-                                          <div className="client-src-id">({gc.client.srcId})</div>
+                              {group.groupClients.filter(gc => gc.type === 'MANDATORY').length > 0 ? (
+                                <div className="clients-grid">
+                                  {group.groupClients
+                                    .filter(gc => gc.type === 'MANDATORY')
+                                    .sort((a, b) => a.priority - b.priority)
+                                    .map((gc) => (
+                                      <div key={gc.id} className="client-card mandatory">
+                                        <div className="client-card-header">
+                                          <div className="client-name-section">
+                                            <h4>{gc.client.name}</h4>
+                                            <div className="client-src-id">({gc.client.srcId})</div>
+                                          </div>
+                                          <div className="client-type-badge mandatory">Mandatory</div>
+                                        </div>
+                                        <div className="client-details-section">
+                                          {gc.client.gender && (
+                                            <div className="client-detail-row">
+                                              <Users />
+                                              <span>{gc.client.gender}</span>
+                                            </div>
+                                          )}
+                                          <div className="client-detail-row">
+                                            <MapPin />
+                                            <span>{gc.client.address}</span>
+                                          </div>
                                         </div>
                                       </div>
-                                    </div>
-                                  ))}
-                              </div>
+                                    ))}
+                                </div>
+                              ) : (
+                                <div className="empty-section">
+                                  <span>No mandatory clients assigned</span>
+                                </div>
+                              )}
                             </div>
 
                             {/* Optional Clients */}
                             {group.groupClients.filter(gc => gc.type === 'OPTIONAL').length > 0 && (
                               <div className="client-section">
                                 <h6 className="section-title optional">
-                                  <span style={{ width: '8px', height: '8px', backgroundColor: '#38a169', borderRadius: '50%', display: 'inline-block' }}></span>
+                                  <UserMinus />
                                   Optional ({group.groupClients.filter(gc => gc.type === 'OPTIONAL').length}/2)
                                 </h6>
                                 <div className="clients-grid">
@@ -647,6 +902,19 @@ const ClientManagementTab = ({ projectId, refreshKey, onImportComplete }) => {
                                           <div className="client-name-section">
                                             <h4>{gc.client.name}</h4>
                                             <div className="client-src-id">({gc.client.srcId})</div>
+                                          </div>
+                                          <div className="client-type-badge optional">Optional</div>
+                                        </div>
+                                        <div className="client-details-section">
+                                          {gc.client.gender && (
+                                            <div className="client-detail-row">
+                                              <Users />
+                                              <span>{gc.client.gender}</span>
+                                            </div>
+                                          )}
+                                          <div className="client-detail-row">
+                                            <MapPin />
+                                            <span>{gc.client.address}</span>
                                           </div>
                                         </div>
                                       </div>
@@ -665,6 +933,14 @@ const ClientManagementTab = ({ projectId, refreshKey, onImportComplete }) => {
                         <h5 style={{ fontWeight: '500', color: '#2d3748', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                           <Users style={{ width: '1rem', height: '1rem', color: '#718096' }} />
                           Ungrouped Clients ({ungroupedClients.length})
+                          <button
+                            onClick={() => openGroupCreatorForLocation(location)}
+                            className="btn-small"
+                            style={{ background: '#38a169', color: 'white', marginLeft: '0.5rem' }}
+                          >
+                            <Plus style={{ width: '0.75rem', height: '0.75rem' }} />
+                            Group These
+                          </button>
                         </h5>
                         <div className="location-clients-grid">
                           {ungroupedClients.map((pc) => (
@@ -688,13 +964,7 @@ const ClientManagementTab = ({ projectId, refreshKey, onImportComplete }) => {
                                 {pc.client.gender && (
                                   <div className="client-detail-row">
                                     <Users />
-                                    <span>{pc.client.gender}</span>
-                                  </div>
-                                )}
-                                {pc.client.race && (
-                                  <div className="client-detail-row">
-                                    <Users />
-                                    <span>{pc.client.race}</span>
+                                    <span>{pc.client.gender} {pc.client.race && `• ${pc.client.race}`}</span>
                                   </div>
                                 )}
                                 <div className="client-detail-row">
@@ -703,6 +973,7 @@ const ClientManagementTab = ({ projectId, refreshKey, onImportComplete }) => {
                                 </div>
                                 {pc.client.languages && (
                                   <div className="client-detail-row">
+                                    <Globe />
                                     <span>Languages: {pc.client.languages}</span>
                                   </div>
                                 )}
@@ -713,126 +984,139 @@ const ClientManagementTab = ({ projectId, refreshKey, onImportComplete }) => {
                       </div>
                     )}
 
-                    {/* Inline Group Creator */}
+                    {/* Enhanced Inline Group Creator */}
                     {showGroupCreatorForLocation === location && (
-                      <div style={{ border: '2px dashed #60a5fa', borderRadius: '0.5rem', padding: '1rem', backgroundColor: '#dbeafe', marginTop: '1rem' }}>
-                        <h5 style={{ fontSize: '1.125rem', fontWeight: '600', color: '#1f2937', marginBottom: '1rem' }}>
-                          {editingGroup ? 'Edit Group' : 'Create New Group'} for {location}
-                        </h5>
+                      <div className="group-creator-panel">
+                        <div className="group-creator-header">
+                          <h5>
+                            {editingGroup ? 'Edit Group' : 'Create New Group'} for {location}
+                          </h5>
+                          <button
+                            onClick={() => setShowGroupCreatorForLocation(null)}
+                            className="btn-icon"
+                          >
+                            <X />
+                          </button>
+                        </div>
                         
                         {/* Group Name Input */}
                         <div className="form-group">
-                          <label>Group Name *</label>
+                          <label>
+                            Group Name *
+                            {errors.name && <span className="error-text">{errors.name}</span>}
+                          </label>
                           <input
                             type="text"
                             value={newGroupForm.name}
-                            onChange={(e) => setNewGroupForm(prev => ({ ...prev, name: e.target.value }))}
+                            onChange={(e) => {
+                              setNewGroupForm(prev => ({ ...prev, name: e.target.value }));
+                              if (errors.name) {
+                                setErrors(prev => ({ ...prev, name: undefined }));
+                              }
+                            }}
                             placeholder="e.g., Group A, Morning Group, etc."
+                            className={errors.name ? 'error' : ''}
                           />
                         </div>
 
-                        {/* Client Selection */}
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
+                        {/* Client Selection Grid */}
+                        <div className="client-selection-grid">
                           {/* Mandatory Clients */}
-                          <div>
-                            <h6 style={{ fontWeight: '500', color: '#1f2937', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                              <span style={{ backgroundColor: '#ef4444', width: '12px', height: '12px', borderRadius: '50%' }}></span>
+                          <div className="selection-column">
+                            <h6 className="selection-title mandatory">
+                              <UserCheck />
                               Mandatory Clients ({newGroupForm.mandatoryClients.length}/3)
+                              {errors.mandatory && <span className="error-text">{errors.mandatory}</span>}
                             </h6>
-                            <div style={{ maxHeight: '8rem', overflowY: 'auto', marginBottom: '0.75rem' }}>
-                              {newGroupForm.mandatoryClients.map((client) => (
-                                <div key={client.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '0.375rem', marginBottom: '0.5rem' }}>
-                                  <span style={{ fontSize: '0.875rem', fontWeight: '500' }}>{client.name}</span>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>({client.srcId})</span>
+                            <div className="selected-clients-list">
+                              {newGroupForm.mandatoryClients.length === 0 ? (
+                                <div className="empty-selection">
+                                  Select mandatory clients from the list below
+                                </div>
+                              ) : (
+                                newGroupForm.mandatoryClients.map((client) => (
+                                  <div key={client.id} className="selected-client mandatory">
+                                    <div className="client-info">
+                                      <span className="client-name">{client.name}</span>
+                                      <span className="client-id">({client.srcId})</span>
+                                    </div>
                                     <button
                                       onClick={() => removeClientFromGroup(client.id, 'mandatory')}
-                                      className="btn-icon"
-                                      style={{ color: '#ef4444' }}
+                                      className="remove-btn"
                                     >
-                                      <X style={{ width: '12px', height: '12px' }} />
+                                      <X />
                                     </button>
                                   </div>
-                                </div>
-                              ))}
+                                ))
+                              )}
                             </div>
                           </div>
 
                           {/* Optional Clients */}
-                          <div>
-                            <h6 style={{ fontWeight: '500', color: '#1f2937', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                              <span style={{ backgroundColor: '#3b82f6', width: '12px', height: '12px', borderRadius: '50%' }}></span>
+                          <div className="selection-column">
+                            <h6 className="selection-title optional">
+                              <UserMinus />
                               Optional Clients ({newGroupForm.optionalClients.length}/2)
+                              {errors.optional && <span className="error-text">{errors.optional}</span>}
                             </h6>
-                            <div style={{ maxHeight: '8rem', overflowY: 'auto', marginBottom: '0.75rem' }}>
-                              {newGroupForm.optionalClients.map((client) => (
-                                <div key={client.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem', backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '0.375rem', marginBottom: '0.5rem' }}>
-                                  <span style={{ fontSize: '0.875rem', fontWeight: '500' }}>{client.name}</span>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>({client.srcId})</span>
+                            <div className="selected-clients-list">
+                              {newGroupForm.optionalClients.length === 0 ? (
+                                <div className="empty-selection">
+                                  Optionally select additional clients
+                                </div>
+                              ) : (
+                                newGroupForm.optionalClients.map((client) => (
+                                  <div key={client.id} className="selected-client optional">
+                                    <div className="client-info">
+                                      <span className="client-name">{client.name}</span>
+                                      <span className="client-id">({client.srcId})</span>
+                                    </div>
                                     <button
                                       onClick={() => removeClientFromGroup(client.id, 'optional')}
-                                      className="btn-icon"
-                                      style={{ color: '#3b82f6' }}
+                                      className="remove-btn"
                                     >
-                                      <X style={{ width: '12px', height: '12px' }} />
+                                      <X />
                                     </button>
                                   </div>
-                                </div>
-                              ))}
+                                ))
+                              )}
                             </div>
                           </div>
                         </div>
 
                         {/* Available Clients */}
-                        <div style={{ marginBottom: '1rem' }}>
-                          <h6 style={{ fontWeight: '500', color: '#1f2937', marginBottom: '0.5rem' }}>Available Clients</h6>
-                          <div style={{ maxHeight: '10rem', overflowY: 'auto', border: '1px solid #d1d5db', borderRadius: '0.5rem' }}>
+                        <div className="available-clients-section">
+                          <h6>Available Clients for {location}</h6>
+                          <div className="available-clients-list">
                             {getAvailableClientsForLocation(location).length === 0 ? (
-                              <div style={{ padding: '0.75rem', textAlign: 'center', color: '#6b7280', fontSize: '0.875rem' }}>
+                              <div className="no-clients-available">
                                 No available clients for this location
                               </div>
                             ) : (
                               getAvailableClientsForLocation(location).map((client) => (
-                                <div key={client.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem', borderBottom: '1px solid #f3f4f6' }}>
-                                  <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ fontWeight: '500' }}>{client.name}</div>
-                                    <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>
+                                <div key={client.id} className="available-client">
+                                  <div className="client-info">
+                                    <div className="client-name">{client.name}</div>
+                                    <div className="client-details">
                                       {client.srcId} {client.gender && `• ${client.gender}`} {client.race && `• ${client.race}`}
                                     </div>
                                   </div>
-                                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                  <div className="client-actions">
                                     <button
                                       onClick={() => addClientToGroup(client, 'mandatory')}
                                       disabled={newGroupForm.mandatoryClients.length >= 3}
-                                      style={{ 
-                                        padding: '0.25rem 0.5rem', 
-                                        backgroundColor: '#ef4444', 
-                                        color: 'white', 
-                                        fontSize: '0.75rem', 
-                                        borderRadius: '0.25rem', 
-                                        border: 'none',
-                                        opacity: newGroupForm.mandatoryClients.length >= 3 ? 0.5 : 1,
-                                        cursor: newGroupForm.mandatoryClients.length >= 3 ? 'not-allowed' : 'pointer'
-                                      }}
+                                      className="add-btn mandatory"
+                                      title="Add as mandatory"
                                     >
-                                      + Mandatory
+                                      + M
                                     </button>
                                     <button
                                       onClick={() => addClientToGroup(client, 'optional')}
                                       disabled={newGroupForm.optionalClients.length >= 2}
-                                      style={{ 
-                                        padding: '0.25rem 0.5rem', 
-                                        backgroundColor: '#3b82f6', 
-                                        color: 'white', 
-                                        fontSize: '0.75rem', 
-                                        borderRadius: '0.25rem', 
-                                        border: 'none',
-                                        opacity: newGroupForm.optionalClients.length >= 2 ? 0.5 : 1,
-                                        cursor: newGroupForm.optionalClients.length >= 2 ? 'not-allowed' : 'pointer'
-                                      }}
+                                      className="add-btn optional"
+                                      title="Add as optional"
                                     >
-                                      + Optional
+                                      + O
                                     </button>
                                   </div>
                                 </div>
@@ -842,7 +1126,7 @@ const ClientManagementTab = ({ projectId, refreshKey, onImportComplete }) => {
                         </div>
 
                         {/* Action Buttons */}
-                        <div className="modal-actions">
+                        <div className="group-creator-actions">
                           <button
                             onClick={() => setShowGroupCreatorForLocation(null)}
                             disabled={creatingGroup}
@@ -896,12 +1180,17 @@ const ClientManagementTab = ({ projectId, refreshKey, onImportComplete }) => {
             </div>
             <div className="modal-form">
               <p>
-                Are you sure you want to remove all <strong>{projectClients.length} clients</strong> from this project?
+                Are you sure you want to remove all <strong>{totalClients} clients</strong> from this project?
               </p>
               <div className="warning-note">
                 <p>
-                  <strong>Warning:</strong> This action cannot be undone and will also remove all client groups.
+                  <strong>Warning:</strong> This action cannot be undone and will:
                 </p>
+                <ul>
+                  <li>Remove all clients from this project</li>
+                  <li>Delete all client groups</li>
+                  <li>Remove any assignments involving these clients</li>
+                </ul>
               </div>
               <div className="modal-actions">
                 <button
@@ -924,7 +1213,7 @@ const ClientManagementTab = ({ projectId, refreshKey, onImportComplete }) => {
                   ) : (
                     <>
                       <Trash2 />
-                      Remove All
+                      Remove All Clients
                     </>
                   )}
                 </button>
