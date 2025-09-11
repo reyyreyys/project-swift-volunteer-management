@@ -4816,3 +4816,415 @@ body {
   color: #3730a3;
 }
 
+/* Simple pair grouping for Training Day attendance table */
+.attendance-table .has-pair {
+  border-left: 4px solid #8b5cf6;
+  background-color: #f5f3ff;
+}
+
+.attendance-table .has-pair.first-in-pair {
+  border-top: 2px solid #8b5cf6;
+}
+
+.attendance-table .has-pair:not(.first-in-pair):not(:has(+ .has-pair:not(.first-in-pair))),
+.attendance-table .has-pair:last-child {
+  border-bottom: 2px solid #8b5cf6;
+}
+
+
+/* Alternative approach - ensure consecutive pairs are properly closed */
+.attendance-table .has-pair + tr:not(.has-pair) {
+  margin-top: 8px;
+}
+
+.attendance-table .has-pair + .has-pair.first-in-pair {
+  margin-top: 8px;
+}
+
+/* Keep existing attendance colors with higher priority */
+.attendance-table .attended {
+  background-color: #d1fae5 !important; /* Slightly different green to work with pair background */
+  border-left-color: #059669 !important;
+}
+
+.attendance-table .not-attended {
+  background-color: #fed7d7 !important; /* Keep red for not attended */
+  border-left-color: #dc2626 !important;
+}
+
+/* Enhance pair indicator */
+.pair-indicator {
+  background-color: #8b5cf6;
+}
+
+/* Better pairing info styling */
+.paired-volunteer .pair-status.confirmed {
+  color: #059669;
+  font-weight: bold;
+}
+
+.paired-volunteer .pair-status.pending {
+  color: #d97706;
+  font-weight: bold;
+}
+
+.partner-name {
+  font-weight: 500;
+  color: #374151;
+}
+
+/* Pairs Overview Table Styles */
+.pairs-overview-container {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+  margin-bottom: 2rem;
+  overflow: hidden;
+}
+
+.pairs-overview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem 2rem;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.pairs-overview-header h4 {
+  color: #2d3748;
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.pairs-stats {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.pairs-overview-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.pairs-overview-table th {
+  background: #f8fafc;
+  padding: 1rem 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  color: #374151;
+  border-bottom: 2px solid #e2e8f0;
+  font-size: 0.875rem;
+}
+
+.pairs-overview-table td {
+  padding: 0.875rem 0.75rem;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 0.875rem;
+}
+
+.pairs-overview-table tr:hover {
+  background: #fafbfb;
+}
+
+/* Pair grouping styles - same as training table */
+.pairs-overview-table .has-pair {
+  border-left: 4px solid #10b981;
+  background-color: #ecfdf5;
+}
+
+.pairs-overview-table .has-pair.first-in-pair {
+  border-top: 2px solid #10b981;
+  border-top-left-radius: 6px;
+  border-top-right-radius: 6px;
+  margin-top: 4px;
+}
+
+.pairs-overview-table .has-pair:not(.first-in-pair):not(:has(+ .has-pair:not(.first-in-pair))),
+.pairs-overview-table .has-pair:last-child {
+  border-bottom: 2px solid #10b981;
+  border-bottom-left-radius: 6px;
+  border-bottom-right-radius: 6px;
+  margin-bottom: 4px;
+}
+
+/* Cell styling */
+.volunteer-name {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.volunteer-type-icon {
+  font-size: 0.875rem;
+}
+
+.experience-star {
+  color: #f59e0b;
+}
+
+.email-cell {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shirt-size-cell {
+  text-align: center;
+}
+
+.shirt-size-badge {
+  background: #e5e7eb;
+  color: #374151;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.pairing-cell {
+  min-width: 150px;
+}
+
+.pair-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.partner-name {
+  font-weight: 500;
+  color: #059669;
+  font-size: 0.75rem;
+}
+
+.pair-name {
+  color: #6b7280;
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+.no-pair {
+  color: #9ca3af;
+  font-style: italic;
+  font-size: 0.75rem;
+}
+
+.status-badge.status-selected {
+  background: #d1fae5;
+  color: #065f46;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .pairs-overview-header {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: flex-start;
+  }
+  
+  .pairs-overview-table {
+    font-size: 0.75rem;
+  }
+  
+  .email-cell {
+    display: none;
+  }
+}
+
+/* Pairs Overview Table Styles */
+.pairs-overview-container {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  margin-bottom: 2rem;
+}
+
+.pairs-overview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2rem;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.pairs-overview-header h4 {
+  color: #2d3748;
+  margin: 0;
+}
+
+.pairs-stats {
+  display: flex;
+  gap: 2rem;
+}
+
+.pairs-stats span {
+  font-weight: 600;
+  color: #4a5568;
+}
+
+.pairs-overview-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.pairs-overview-table th {
+  background: #f8fafc;
+  padding: 1rem 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  color: #374151;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.pairs-overview-table td {
+  padding: 0.75rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.pairs-overview-table tr:hover {
+  background: #fafbfb;
+}
+
+.pairs-overview-table tr.has-pair {
+  background: #f0f9ff !important;
+}
+
+.volunteer-name {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.volunteer-type-icon {
+  font-size: 1rem;
+}
+
+.experience-star {
+  color: #f59e0b;
+  font-size: 0.875rem;
+}
+
+.shirt-size-badge {
+  background: #e5e7eb;
+  color: #374151;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.pair-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.partner-name {
+  font-weight: 500;
+  color: #4a5568;
+}
+
+.pair-name {
+  font-size: 0.875rem;
+  color: #667eea;
+  font-weight: 500;
+}
+
+.no-pair {
+  color: #9ca3af;
+  font-style: italic;
+  font-size: 0.875rem;
+}
+
+.status-badge.status-selected {
+  background: #d1fae5;
+  color: #065f46;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+/* Pairs Overview Table - Group row styling */
+.pairs-overview-table tr.is-group {
+  background-color: #f0f9ff !important;
+  border-left: 3px solid #3b82f6;
+}
+
+.pairs-overview-table tr.is-group .volunteer-type-icon {
+  color: #3b82f6;
+  font-weight: bold;
+}
+
+.pairs-overview-table tr.has-pair.is-group {
+  background-color: #ecfdf5 !important;
+  border-left: 3px solid #059669;
+}
+
+/* Enhanced Pairs Overview Table Styles */
+.pairs-overview-table tr.is-group {
+  background-color: #f0f9ff !important;
+  border-left: 4px solid #3b82f6;
+  font-weight: 600;
+}
+
+.pairs-overview-table tr.is-group .volunteer-type-icon {
+  color: #3b82f6;
+  font-weight: bold;
+  font-size: 1.2em;
+}
+
+.pairs-overview-table tr.has-pair.is-group {
+  background-color: #ecfdf5 !important;
+  border-left: 4px solid #059669;
+}
+
+.pair-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.partner-name {
+  font-weight: 600;
+  color: #4a5568;
+}
+
+.pair-name {
+  font-size: 0.875rem;
+  color: #718096;
+  font-style: italic;
+}
+
+.group-indicator {
+  font-size: 0.75rem;
+  color: #3b82f6;
+  font-weight: 500;
+}
+
+.no-pair {
+  color: #a0aec0;
+  font-style: italic;
+}
+
+.shirt-size-badge {
+  background: #edf2f7;
+  color: #4a5568;
+  padding: 0.25rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}

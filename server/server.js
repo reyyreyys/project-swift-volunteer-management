@@ -14,7 +14,7 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const corsOptions = {
   origin: process.env.FRONTEND_URL || "http://localhost:3000",
   credentials: true,              // allow cookies/credentials
-  methods: ["GET","POST","PUT","DELETE","OPTIONS"]
+  methods: ["GET","POST","PUT","DELETE","OPTIONS","PATCH"]
 };
 
 
@@ -205,6 +205,40 @@ app.post('/api/auth/login', async (req, res) => {
 
 // Get volunteers for a specific project, including their involvement in other projects
 // Backend: Get volunteers with their selection status
+
+app.get('/api/projects/:id/volunteer-pairs', authenticateToken, checkProjectAccess, async (req, res) => {
+  try {
+    const volunteerPairs = await prisma.volunteerPair.findMany({
+      where: { 
+        projectId: req.params.id,
+        isActive: true // Only show active pairs
+      },
+      include: {
+        volunteer1: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        },
+        volunteer2: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.json(volunteerPairs);
+  } catch (error) {
+    console.error('Get volunteer pairs error:', error);
+    res.status(500).json({ error: 'Failed to get volunteer pairs' });
+  }
+});
+
 app.get('/api/projects/:id/volunteers-detailed', authenticateToken, checkProjectAccess, async (req, res) => {
   try {
     const projectVolunteers = await prisma.projectVolunteer.findMany({

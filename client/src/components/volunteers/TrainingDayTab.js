@@ -8,6 +8,7 @@ import apiClient from '../../api/axiosClient';
 
 const TrainingDayTab = ({ projectId, refreshKey = 0 }) => {
   const [volunteers, setVolunteers] = useState([]);
+  const [volunteerPairs, setVolunteerPairs] = useState([]);
   const [trainingAttendance, setTrainingAttendance] = useState({});
   const [waitlistedSelection, setWaitlistedSelection] = useState({});
   const [loading, setLoading] = useState(true);
@@ -20,8 +21,19 @@ const TrainingDayTab = ({ projectId, refreshKey = 0 }) => {
   const loadData = async () => {
     try {
       setLoading(true);
+      
+      // Load volunteers with detailed info
       const volunteersRes = await apiClient.get(`/projects/${projectId}/volunteers-detailed`);
       setVolunteers(volunteersRes.data || []);
+      
+      // Load volunteer pairs for this project
+      try {
+        const pairsRes = await apiClient.get(`/projects/${projectId}/volunteer-pairs`);
+        setVolunteerPairs(pairsRes.data || []);
+      } catch (error) {
+        console.warn('Could not load volunteer pairs:', error);
+        setVolunteerPairs([]);
+      }
       
       // Initialize attendance state for volunteers without experience
       const attendanceState = {};
@@ -47,19 +59,38 @@ const TrainingDayTab = ({ projectId, refreshKey = 0 }) => {
     }
   };
 
+  // Helper function to find volunteer pairs
+  const getVolunteerPairInfo = (volunteerId) => {
+    const pair = volunteerPairs.find(pair => 
+      pair.volunteer1Id === volunteerId || pair.volunteer2Id === volunteerId
+    );
+    
+    if (!pair) return null;
+    
+    // Find the partner
+    const partnerId = pair.volunteer1Id === volunteerId ? pair.volunteer2Id : pair.volunteer1Id;
+    const partner = volunteers.find(pv => pv.volunteer.id === partnerId);
+    
+    return {
+      pairId: pair.id,
+      partnerId,
+      partnerName: partner ? `${partner.volunteer.firstName} ${partner.volunteer.lastName}` : 'Unknown',
+      isConfirmed: pair.isConfirmed
+    };
+  };
+
   // Filter and sort volunteers for training selection
-const trainingCandidates = useMemo(() => {
-  const selected = volunteers.filter(pv => pv.status === 'SELECTED');
-  const waitlisted = volunteers.filter(pv => pv.status === 'WAITLISTED');
-  
-  // Show ALL waitlisted volunteers instead of limiting to 5
-  return [...selected, ...waitlisted]; // Remove the slice(0, 5)
-}, [volunteers]);
+  const trainingCandidates = useMemo(() => {
+    const selected = volunteers.filter(pv => pv.status === 'SELECTED');
+    const waitlisted = volunteers.filter(pv => pv.status === 'WAITLISTED');
+    
+    // Show ALL waitlisted volunteers instead of limiting to 5
+    return [...selected, ...waitlisted];
+  }, [volunteers]);
 
-
-  // Filter volunteers who need training based on selection
+  // Filter and group volunteers who need training based on selection
   const volunteersNeedingTraining = useMemo(() => {
-    return trainingCandidates.filter(pv => {
+    const filtered = trainingCandidates.filter(pv => {
       if (!pv.volunteer.hasExperience) {
         // Selected volunteers always need training if no experience
         if (pv.status === 'SELECTED') {
@@ -72,7 +103,48 @@ const trainingCandidates = useMemo(() => {
       }
       return false;
     });
-  }, [trainingCandidates, waitlistedSelection]);
+
+    // Group volunteers by pairs and sort to show pairs together
+    const pairedVolunteers = [];
+    const unpairedVolunteers = [];
+    const processedVolunteerIds = new Set();
+
+    filtered.forEach(pv => {
+      if (processedVolunteerIds.has(pv.volunteer.id)) return;
+
+      const pairInfo = getVolunteerPairInfo(pv.volunteer.id);
+      
+      if (pairInfo) {
+        // Find the partner in the filtered list
+        const partner = filtered.find(p => p.volunteer.id === pairInfo.partnerId);
+        
+        if (partner && !processedVolunteerIds.has(partner.volunteer.id)) {
+          // Add both volunteers in the pair together
+          pairedVolunteers.push(pv, partner);
+          processedVolunteerIds.add(pv.volunteer.id);
+          processedVolunteerIds.add(partner.volunteer.id);
+        } else if (!processedVolunteerIds.has(pv.volunteer.id)) {
+          // Partner not in training list, add volunteer alone
+          unpairedVolunteers.push(pv);
+          processedVolunteerIds.add(pv.volunteer.id);
+        }
+      } else {
+        // No pair, add to unpaired list
+        unpairedVolunteers.push(pv);
+        processedVolunteerIds.add(pv.volunteer.id);
+      }
+    });
+
+    // Sort unpaired volunteers alphabetically
+    unpairedVolunteers.sort((a, b) => 
+      `${a.volunteer.firstName} ${a.volunteer.lastName}`.localeCompare(
+        `${b.volunteer.firstName} ${b.volunteer.lastName}`
+      )
+    );
+
+    // Return pairs first, then unpaired volunteers
+    return [...pairedVolunteers, ...unpairedVolunteers];
+  }, [trainingCandidates, waitlistedSelection, volunteerPairs, volunteers]);
 
   const handleAttendanceChange = async (projectVolunteerId, attended) => {
     setTrainingAttendance(prev => ({
@@ -218,7 +290,7 @@ const trainingCandidates = useMemo(() => {
                   const v = pv.volunteer;
                   const hasExperience = v.hasExperience;
                   const isWaitlisted = pv.status === 'WAITLISTED';
-                  const isSelectedForTraining = isWaitlisted ? waitlistedSelection[pv.id] : true; // Selected volunteers always included
+                  const isSelectedForTraining = isWaitlisted ? waitlistedSelection[pv.id] : true;
                   
                   return (
                     <tr 
@@ -267,7 +339,6 @@ const trainingCandidates = useMemo(() => {
                       </td>
                       <td>
                         {isWaitlisted ? (
-                          // Checkbox for waitlisted volunteers
                           <div className="training-selection">
                             <input
                               type="checkbox"
@@ -281,7 +352,6 @@ const trainingCandidates = useMemo(() => {
                             </label>
                           </div>
                         ) : (
-                          // Auto-selected for regular volunteers
                           <span className="auto-selected">
                             <CheckCircle size={16} />
                             Auto-Selected
@@ -296,16 +366,6 @@ const trainingCandidates = useMemo(() => {
           </table>
         </div>
         
-        {/* Show info about waitlist limitation */}
-        {waitlistedCount > 5 && (
-          <div className="waitlist-notice">
-            <AlertCircle size={16} />
-            <span>
-              Note: Only the first 5 waitlisted volunteers are shown. 
-              {waitlistedCount - 5} waitlisted volunteers are not included.
-            </span>
-          </div>
-        )}
       </div>
 
       {/* Table 2: Training Attendance */}
@@ -315,7 +375,7 @@ const trainingCandidates = useMemo(() => {
           Training Attendance ({volunteersNeedingTraining.length} must attend)
         </h4>
         <p className="section-description">
-          Volunteers who will attend training. Check the box when they've completed training.
+          Volunteers who will attend training (paired volunteers shown together). Check the box when they've completed training.
         </p>
 
         {volunteersNeedingTraining.length > 0 && (
@@ -338,6 +398,8 @@ const trainingCandidates = useMemo(() => {
                 <th>Name</th>
                 <th>Contact</th>
                 <th>Email</th>
+                <th>Shirt Size</th>
+                <th>Pairing</th>
                 <th>Status</th>
                 <th>Attended Training</th>
                 <th>Action</th>
@@ -346,7 +408,7 @@ const trainingCandidates = useMemo(() => {
             <tbody>
               {volunteersNeedingTraining.length === 0 ? (
                 <tr>
-                  <td colSpan="6" style={{ textAlign: 'center', padding: '40px' }}>
+                  <td colSpan="8" style={{ textAlign: 'center', padding: '40px' }}>
                     <BookOpen size={48} style={{ opacity: 0.3, marginBottom: '10px' }} />
                     <div>No volunteers selected for training</div>
                     <div style={{ fontSize: '0.9em', color: '#666', marginTop: '5px' }}>
@@ -355,20 +417,60 @@ const trainingCandidates = useMemo(() => {
                   </td>
                 </tr>
               ) : (
-                volunteersNeedingTraining.map(pv => {
+                volunteersNeedingTraining.map((pv, index) => {
                   const v = pv.volunteer;
                   const hasAttended = trainingAttendance[pv.id] || false;
+                  const pairInfo = getVolunteerPairInfo(v.id);
+                  const isFirstInPair = pairInfo && (index === 0 || 
+                    !getVolunteerPairInfo(volunteersNeedingTraining[index - 1]?.volunteer.id) ||
+                    getVolunteerPairInfo(volunteersNeedingTraining[index - 1]?.volunteer.id)?.pairId !== pairInfo.pairId
+                  );
                   
                   return (
-                    <tr key={pv.id} className={hasAttended ? 'attended' : 'not-attended'}>
+                    <tr 
+                      key={pv.id} 
+                      className={`
+                        ${hasAttended ? 'attended' : 'not-attended'}
+                        ${pairInfo ? 'has-pair' : 'no-pair'}
+                        ${isFirstInPair ? 'first-in-pair' : ''}
+                      `}
+                    >
                       <td>
                         <div className="volunteer-name">
                           <strong>{v.firstName} {v.lastName}</strong>
                           {pv.status === 'WAITLISTED' && <span className="waitlist-indicator">W</span>}
+                          {pairInfo && <span className="pair-indicator">👥</span>}
                         </div>
                       </td>
                       <td>{v.contactNumber || 'N/A'}</td>
                       <td>{v.email || 'N/A'}</td>
+                      <td>
+                        <div className="shirt-size">
+                          {v.shirtSize ? (
+                            <span className="shirt-size-badge">
+                              {v.shirtSize}
+                            </span>
+                          ) : (
+                            <span className="shirt-size-unknown">N/A</span>
+                          )}
+                        </div>
+                      </td>
+                      <td>
+                        <div className="pairing-info">
+                          {pairInfo ? (
+                            <div className="paired-volunteer">
+                              <span className={`pair-status ${pairInfo.isConfirmed ? 'confirmed' : 'pending'}`}>
+                                {pairInfo.isConfirmed ? '✓' : '⏳'}
+                              </span>
+                              <span className="partner-name">
+                                {pairInfo.partnerName}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="no-pair">No pair</span>
+                          )}
+                        </div>
+                      </td>
                       <td>
                         <span className={`status-badge status-${pv.status.toLowerCase()}`}>
                           {pv.status}

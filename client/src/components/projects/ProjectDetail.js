@@ -1,24 +1,179 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
-import { 
-  ArrowLeft, 
-  Users, 
-  UserCheck, 
-  Share2, 
-  Settings, 
-  AlertTriangle, 
+import {
+  ArrowLeft,
+  Users,
+  UserCheck,
+  Share2,
+  Settings,
+  AlertTriangle,
   Trash2,
   Link2,
-  BookOpen,  // Add this import for the training tab icon
-  Target     // Add this import for the assignments tab icon
+  BookOpen,
+  Target
 } from 'lucide-react';
+
 import VolunteerCSVImporter from '../volunteers/VolunteerCSVImporter';
 import VolunteerSelectionTable from '../volunteers/VolunteerSelectionTable';
 import VolunteerPairingTab from '../volunteers/VolunteerPairingTab';
-import TrainingDayTab from '../volunteers/TrainingDayTab';  // Add this import
+import TrainingDayTab from '../volunteers/TrainingDayTab';
 import ClientManagementTab from '../clients/ClientManagementTab';
-import AssignmentsTab from '../assignments/AssignmentsTab'; // Add this import
+import AssignmentsTab from '../assignments/AssignmentsTab';
+
+// Add the PairsOverviewTable component
+const PairsOverviewTable = ({ volunteers, pairs }) => {
+  // Create a map of volunteer pairs for easy lookup
+  const pairMap = {};
+  
+  // Debug: log the data structure
+  console.log('Raw pairs data:', pairs);
+  console.log('Raw volunteers data:', volunteers);
+  
+  pairs.forEach(pair => {
+    if (pair.volunteer1 && pair.volunteer2) {
+      // Get names from the included volunteer objects
+      const volunteer1Name = pair.volunteer1.firstName && pair.volunteer1.lastName 
+        ? `${pair.volunteer1.firstName} ${pair.volunteer1.lastName}` 
+        : 'Unknown';
+      const volunteer2Name = pair.volunteer2.firstName && pair.volunteer2.lastName 
+        ? `${pair.volunteer2.firstName} ${pair.volunteer2.lastName}` 
+        : 'Unknown';
+      
+      // Map using the volunteer IDs from the pair
+      pairMap[pair.volunteer1.id] = { 
+        partnerId: pair.volunteer2.id, 
+        pairName: pair.name || `${volunteer1Name} & ${volunteer2Name}`,
+        partnerName: volunteer2Name
+      };
+      pairMap[pair.volunteer2.id] = { 
+        partnerId: pair.volunteer1.id, 
+        pairName: pair.name || `${volunteer1Name} & ${volunteer2Name}`,
+        partnerName: volunteer1Name
+      };
+    }
+  });
+
+  // Filter for selected volunteers and sort: groups first, then individuals
+  const selectedVolunteers = volunteers
+    .filter(pv => 
+      pv.status && (pv.status.toLowerCase() === 'selected' || pv.status.toUpperCase() === 'SELECTED')
+    )
+    .sort((a, b) => {
+      // Sort by group type: groups first, then individuals
+      const aIsGroup = a.volunteer && (
+        a.volunteer.groupType === 'group' || 
+        a.volunteer.type === 'group' ||
+        a.volunteer.groupName || 
+        a.volunteer.group
+      );
+      const bIsGroup = b.volunteer && (
+        b.volunteer.groupType === 'group' || 
+        b.volunteer.type === 'group' ||
+        b.volunteer.groupName || 
+        b.volunteer.group
+      );
+      
+      if (aIsGroup && !bIsGroup) return -1; // a comes first
+      if (!aIsGroup && bIsGroup) return 1;  // b comes first
+      
+      // If both are same type, sort alphabetically by name
+      const aName = a.volunteer.firstName || a.volunteer.name || '';
+      const bName = b.volunteer.firstName || b.volunteer.name || '';
+      return aName.localeCompare(bName);
+    });
+
+  console.log('Sorted selected volunteers:', selectedVolunteers);
+  console.log('Pair map:', pairMap);
+
+  return (
+    <div className="pairs-overview-container">
+      <div className="pairs-overview-header">
+        <h4>Selected Volunteers & Pairings</h4>
+        <div className="pairs-stats">
+          <span>{selectedVolunteers.length} Selected</span>
+          <span>{pairs.length} Pairs</span>
+        </div>
+      </div>
+      
+      <div className="table-container">
+        <table className="pairs-overview-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Contact</th>
+              <th>Email</th>
+              <th>Shirt Size</th>
+              <th>Pairing</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {selectedVolunteers.map((projectVolunteer, index) => {
+              // Access the nested volunteer data
+              const volunteer = projectVolunteer.volunteer;
+              const volunteerId = volunteer.id;
+              const pairInfo = pairMap[volunteerId];
+              
+              // Check if this volunteer is part of a group
+              const isGroup = volunteer.groupType === 'group' || 
+                             volunteer.type === 'group' ||
+                             volunteer.groupName || 
+                             volunteer.group;
+              
+              return (
+                <tr 
+                  key={volunteerId || index}
+                  className={`${pairInfo ? 'has-pair' : ''} ${isGroup ? 'is-group' : ''}`}
+                >
+                  <td className="name-cell">
+                    <div className="volunteer-name">
+                      <span className="volunteer-type-icon">
+                        {isGroup ? '👥' : '👤'}
+                      </span>
+                      {/* Build full name */}
+                      {volunteer.firstName && volunteer.lastName 
+                        ? `${volunteer.firstName} ${volunteer.lastName}`
+                        : volunteer.name || volunteer.firstName || volunteer.fullName || 'Unknown'}
+                      {(volunteer.hasExperience || volunteer.experience) && <span className="experience-star">⭐</span>}
+                      {/* Show group name if available */}
+                      {isGroup && (volunteer.groupName || volunteer.group) && (
+                        <span className="group-indicator"> (Group: {volunteer.groupName || volunteer.group})</span>
+                      )}
+                    </div>
+                  </td>
+                  <td>{volunteer.contact || volunteer.phone || volunteer.phoneNumber || 'N/A'}</td>
+                  <td className="email-cell">{volunteer.email || 'N/A'}</td>
+                  <td className="shirt-size-cell">
+                    <span className="shirt-size-badge">
+                      {volunteer.shirtSize || volunteer.tshirtSize || 'N/A'}
+                    </span>
+                  </td>
+                  <td className="pairing-cell">
+                    {pairInfo ? (
+                      <div className="pair-info">
+                        <div className="partner-name">With: {pairInfo.partnerName}</div>
+                        <div className="pair-name">{pairInfo.pairName}</div>
+                      </div>
+                    ) : (
+                      <span className="no-pair">No pairing</span>
+                    )}
+                  </td>
+                  <td>
+                    <span className="status-badge status-selected">
+                      {projectVolunteer.status || 'SELECTED'}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
 
 
 const ProjectDetail = () => {
@@ -26,26 +181,20 @@ const ProjectDetail = () => {
   const [project, setProject] = useState(null);
   const [projectVolunteers, setProjectVolunteers] = useState([]);
   const [projectClients, setProjectClients] = useState([]);
-  // Add these new state variables for assignments functionality
   const [volunteerPairs, setVolunteerPairs] = useState([]);
   const [clientGroups, setClientGroups] = useState([]);
   const [assignments, setAssignments] = useState([]);
-  
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
   const [showVolunteerImporter, setShowVolunteerImporter] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [clearingVolunteers, setClearingVolunteers] = useState(false);
-  
-  // Add refresh key state for triggering component refreshes
   const [refreshKey, setRefreshKey] = useState(0);
-
 
   useEffect(() => {
     loadProject();
     loadProjectData();
   }, [id]);
-
 
   const loadProject = async () => {
     try {
@@ -58,45 +207,41 @@ const ProjectDetail = () => {
     }
   };
 
+// In the loadProjectData function, change the pairs API call:
+const loadProjectData = async () => {
+  try {
+    const [volunteersRes, clientsRes, pairsRes, groupsRes, assignmentsRes] = await Promise.all([
+      axios.get(`/projects/${id}/volunteers-detailed`).catch(() => ({ data: [] })),
+      axios.get(`/projects/${id}/clients`).catch(() => ({ data: [] })),
+      // Use the correct API endpoint that includes volunteer details:
+      axios.get(`/api/projects/${id}/volunteer-pairs`).catch(() => ({ data: [] })),
+      axios.get(`/projects/${id}/client-groups`).catch(() => ({ data: [] })),
+      axios.get(`/projects/${id}/assignments`).catch(() => ({ data: [] }))
+    ]);
 
-  // Updated loadProjectData to include pairs, client groups, and assignments
-  const loadProjectData = async () => {
-    try {
-      const [volunteersRes, clientsRes, pairsRes, groupsRes, assignmentsRes] = await Promise.all([
-        axios.get(`/projects/${id}/volunteers-detailed`).catch(() => ({ data: [] })),
-        axios.get(`/projects/${id}/clients`).catch(() => ({ data: [] })),
-        axios.get(`/projects/${id}/pairs`).catch(() => ({ data: [] })),
-        axios.get(`/projects/${id}/client-groups`).catch(() => ({ data: [] })),
-        axios.get(`/projects/${id}/assignments`).catch(() => ({ data: [] }))
-      ]);
-      
-      setProjectVolunteers(volunteersRes.data);
-      setProjectClients(clientsRes.data);
-      setVolunteerPairs(pairsRes.data);
-      setClientGroups(groupsRes.data);
-      setAssignments(assignmentsRes.data);
-    } catch (error) {
-      console.error('Error loading project data:', error);
-    }
-  };
+    setProjectVolunteers(volunteersRes.data);
+    setProjectClients(clientsRes.data);
+    setVolunteerPairs(pairsRes.data);
+    setClientGroups(groupsRes.data);
+    setAssignments(assignmentsRes.data);
+  } catch (error) {
+    console.error('Error loading project data:', error);
+  }
+};
 
 
-  // Update this function to trigger refresh
   const handleImportComplete = (result) => {
     console.log('Import completed:', result);
     setShowVolunteerImporter(false);
     loadProjectData();
-    setRefreshKey(prev => prev + 1); // Trigger refresh for other tabs
+    setRefreshKey(prev => prev + 1);
   };
-
 
   const handleImportVolunteers = () => {
     setShowVolunteerImporter(true);
     setActiveTab('volunteers');
   };
 
-
-  // Update this function to trigger refresh
   const handleClearVolunteers = async () => {
     setClearingVolunteers(true);
     try {
@@ -104,16 +249,14 @@ const ProjectDetail = () => {
       if (response.data.success) {
         const { removedFromProject, completelyDeleted } = response.data;
         let message = `Successfully removed ${removedFromProject} volunteers from project.`;
-        
         if (completelyDeleted > 0) {
           message += ` ${completelyDeleted} volunteers were completely deleted as they were only in this project.`;
         } else {
           message += ` All volunteers remain available for other projects.`;
         }
-        
         alert(message);
         loadProjectData();
-        setRefreshKey(prev => prev + 1); // Trigger refresh for other tabs
+        setRefreshKey(prev => prev + 1);
         setShowClearConfirm(false);
       }
     } catch (error) {
@@ -123,69 +266,292 @@ const ProjectDetail = () => {
     }
   };
 
-
   if (loading) {
     return (
-      <div className="loading-container">
+      <div className="loading-screen">
         <div className="spinner"></div>
         <p>Loading project...</p>
       </div>
     );
   }
 
-
   if (!project) {
     return (
-      <div className="error-container">
-        <h2>Project not found</h2>
-        <Link to="/projects">← Back to Projects</Link>
+      <div className="project-detail">
+        <p>Project not found</p>
+        <Link to="/projects" className="back-link">
+          <ArrowLeft size={16} /> Back to Projects
+        </Link>
       </div>
     );
   }
 
-
-  // Calculate statistics for better tab labels
-  const selectedVolunteers = projectVolunteers.filter(pv => pv.status === 'SELECTED').length;
-  const waitlistedVolunteers = projectVolunteers.filter(pv => pv.status === 'WAITLISTED').length;
-  const experiencedVolunteers = projectVolunteers.filter(pv => 
-    (pv.status === 'SELECTED' || pv.status === 'WAITLISTED') && pv.volunteer.hasExperience
+  // Calculate stats with improved status checking
+  const selectedVolunteers = projectVolunteers.filter(v => 
+    v.status && (v.status.toLowerCase() === 'selected' || v.status.toUpperCase() === 'SELECTED')
   ).length;
-  const needTrainingCount = projectVolunteers.filter(pv => 
-    (pv.status === 'SELECTED' || pv.status === 'WAITLISTED') && !pv.volunteer.hasExperience
+  
+  const waitlistedVolunteers = projectVolunteers.filter(v => 
+    v.status && (v.status.toLowerCase() === 'waitlisted' || v.status.toUpperCase() === 'WAITLISTED')
+  ).length;
+  
+  const experiencedVolunteers = projectVolunteers.filter(v => 
+    v.hasExperience === true || v.experience === true
+  ).length;
+  
+  const needTrainingCount = projectVolunteers.filter(v => 
+    (v.status && (v.status.toLowerCase() === 'selected' || v.status.toUpperCase() === 'SELECTED')) &&
+    !(v.hasExperience === true || v.experience === true)
   ).length;
 
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'overview':
+        return (
+          <div className="overview-tab">
+            {/* Overview Stats */}
+            <div className="overview-stats">
+              <div className="stat-card">
+                <h3>Volunteers</h3>
+                <div className="stat-number">{projectVolunteers.length}</div>
+                <div className="stat-subtitle">
+                  {selectedVolunteers} selected, {waitlistedVolunteers} waitlisted
+                </div>
+              </div>
+              <div className="stat-card">
+                <h3>Training Status</h3>
+                <div className="stat-number">{needTrainingCount}</div>
+                <div className="stat-subtitle">
+                  {experiencedVolunteers} have experience
+                </div>
+              </div>
+              <div className="stat-card">
+                <h3>Clients</h3>
+                <div className="stat-number">{projectClients.length}</div>
+                <div className="stat-subtitle">
+                  {clientGroups.length} groups created
+                </div>
+              </div>
+            </div>
+
+            <div className="overview-stats">
+              <div className="stat-card">
+                <h3>Assignments</h3>
+                <div className="stat-number">{assignments.length}</div>
+                <div className="stat-subtitle">
+                  {volunteerPairs.length} pairs available
+                </div>
+              </div>
+            </div>
+
+            {/* Add the pairs overview table - show regardless of selected count for debugging */}
+            <PairsOverviewTable 
+              volunteers={projectVolunteers} 
+              pairs={volunteerPairs} 
+            />
+
+            {/* Quick Actions */}
+            <div className="quick-actions-section">
+              <h3>Quick Actions</h3>
+              <div className="action-grid">
+                <Link 
+                  to="#" 
+                  className="action-card"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setActiveTab('volunteers');
+                  }}
+                >
+                  <Users size={48} />
+                  Manage Volunteers
+                </Link>
+                
+                <Link 
+                  to="#" 
+                  className={`action-card ${selectedVolunteers === 0 ? 'disabled' : ''}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (selectedVolunteers > 0) {
+                      setActiveTab('pairing');
+                    }
+                  }}
+                >
+                  <Link2 size={48} />
+                  Create Pairs
+                </Link>
+                
+                <Link 
+                  to="#" 
+                  className={`action-card ${selectedVolunteers === 0 ? 'disabled' : ''}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (selectedVolunteers > 0) {
+                      setActiveTab('training');
+                    }
+                  }}
+                >
+                  <BookOpen size={48} />
+                  Training Day
+                </Link>
+                
+                <Link 
+                  to="#" 
+                  className="action-card"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setActiveTab('clients');
+                  }}
+                >
+                  <UserCheck size={48} />
+                  Manage Clients
+                </Link>
+                
+                <Link 
+                  to="#" 
+                  className={`action-card ${(volunteerPairs.length === 0 || clientGroups.length === 0) ? 'disabled' : ''}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (volunteerPairs.length > 0 && clientGroups.length > 0) {
+                      setActiveTab('assignments');
+                    }
+                  }}
+                >
+                  <Target size={48} />
+                  Create Assignments
+                </Link>
+              </div>
+            </div>
+
+            {/* Info messages for disabled actions */}
+            {selectedVolunteers === 0 && (
+              <div className="info-message">
+                <AlertTriangle size={16} />
+                You need to select volunteers before you can create pairs.
+              </div>
+            )}
+            
+            {selectedVolunteers === 0 && (
+              <div className="info-message">
+                <AlertTriangle size={16} />
+                You need to select volunteers before you can manage their training.
+              </div>
+            )}
+            
+            {(volunteerPairs.length === 0 || clientGroups.length === 0) && (
+              <div className="info-message">
+                <AlertTriangle size={16} />
+                You need both volunteer pairs and client groups before creating assignments.
+                {volunteerPairs.length === 0 && (
+                  <ul>
+                    <li>Create volunteer pairs first ({volunteerPairs.length} pairs available)</li>
+                  </ul>
+                )}
+                {clientGroups.length === 0 && (
+                  <ul>
+                    <li>Create client groups first ({clientGroups.length} groups available)</li>
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
+        );
+        
+      case 'volunteers':
+        return (
+          <>
+            {showVolunteerImporter && (
+              <VolunteerCSVImporter 
+                projectId={id}
+                onComplete={handleImportComplete}
+                onCancel={() => setShowVolunteerImporter(false)}
+              />
+            )}
+            <VolunteerSelectionTable 
+              key={refreshKey}
+              projectId={id} 
+              onImport={handleImportVolunteers}
+              onClear={() => setShowClearConfirm(true)}
+            />
+          </>
+        );
+        
+      case 'pairing':
+        return (
+          <VolunteerPairingTab 
+            key={refreshKey}
+            projectId={id} 
+            volunteers={projectVolunteers}
+            pairs={volunteerPairs}
+            onPairsUpdate={loadProjectData}
+          />
+        );
+        
+      case 'training':
+        return (
+          <TrainingDayTab 
+            key={refreshKey}
+            projectId={id}
+            volunteers={projectVolunteers}
+          />
+        );
+        
+      case 'clients':
+        return (
+          <ClientManagementTab 
+            key={refreshKey}
+            projectId={id}
+            clients={projectClients}
+            onClientsUpdate={loadProjectData}
+          />
+        );
+        
+      case 'assignments':
+        return (
+          <AssignmentsTab 
+            key={refreshKey}
+            projectId={id}
+            volunteerPairs={volunteerPairs}
+            clientGroups={clientGroups}
+            assignments={assignments}
+            onAssignmentsUpdate={loadProjectData}
+          />
+        );
+        
+      default:
+        return <div>Tab not found</div>;
+    }
+  };
 
   return (
-    <div className="project-detail">
+    <div className="project-content">
+      {/* Project Header */}
       <div className="project-header">
-        <div className="header-main">
+        <div className="header-top">
           <Link to="/projects" className="back-link">
-            <ArrowLeft size={20} />
-            Back to Projects
+            <ArrowLeft size={16} /> Back to Projects
           </Link>
-          <h1>{project.name}</h1>
-          <p>{project.description}</p>
+          <div className="project-actions">
+            <button className="action-btn secondary">
+              <Share2 size={16} /> Share
+            </button>
+            <button className="action-btn secondary">
+              <Settings size={16} /> Settings
+            </button>
+          </div>
         </div>
-        
-        <div className="header-actions">
-          <button className="action-btn">
-            <Share2 size={16} />
-            Share Project
-          </button>
-          <button className="action-btn">
-            <Settings size={16} />
-            Settings
-          </button>
+        <div className="project-title-section">
+          <h1>{project.name}</h1>
+          <p className="project-description">{project.description}</p>
         </div>
       </div>
 
-
-      {/* Updated tabs with Assignments tab */}
+      {/* Project Tabs */}
       <div className="project-tabs">
         <button 
           className={`tab ${activeTab === 'overview' ? 'active' : ''}`}
           onClick={() => setActiveTab('overview')}
         >
+          <Settings size={16} />
           Overview
         </button>
         <button 
@@ -200,7 +566,14 @@ const ProjectDetail = () => {
           onClick={() => setActiveTab('pairing')}
         >
           <Link2 size={16} />
-          Pairing ({selectedVolunteers + waitlistedVolunteers})
+          Pairing ({volunteerPairs.length})
+        </button>
+        <button 
+          className={`tab ${activeTab === 'training' ? 'active' : ''}`}
+          onClick={() => setActiveTab('training')}
+        >
+          <BookOpen size={16} />
+          Training Day
         </button>
         <button 
           className={`tab ${activeTab === 'clients' ? 'active' : ''}`}
@@ -215,388 +588,59 @@ const ProjectDetail = () => {
         >
           <Target size={16} />
           Assignments ({assignments.length})
-        </button>a
-        <button 
-          className={`tab ${activeTab === 'training' ? 'active' : ''}`}
-          onClick={() => setActiveTab('training')}
-        >
-          <BookOpen size={16} />
-          Training ({needTrainingCount})
         </button>
       </div>
 
-
-      <div className="project-content">
-        {activeTab === 'overview' && (
-          <div className="overview-tab">
-            <div className="overview-stats">
-              <div className="stat-card">
-                <h3>Volunteers</h3>
-                <p className="stat-number">{projectVolunteers.length}</p>
-                <p className="stat-subtitle">
-                  {selectedVolunteers} selected, {waitlistedVolunteers} waitlisted
-                </p>
-              </div>
-              <div className="stat-card">
-                <h3>Training Needed</h3>
-                <p className="stat-number">{needTrainingCount}</p>
-                <p className="stat-subtitle">
-                  {experiencedVolunteers} have experience
-                </p>
-              </div>
-              <div className="stat-card">
-                <h3>Clients</h3>
-                <p className="stat-number">{projectClients.length}</p>
-                <p className="stat-subtitle">
-                  {clientGroups.length} groups created
-                </p>
-              </div>
-              <div className="stat-card">
-                <h3>Assignments</h3>
-                <p className="stat-number">{assignments.length}</p>
-                <p className="stat-subtitle">
-                  {volunteerPairs.length} pairs available
-                </p>
-              </div>
-            </div>
-
-
-            <div className="quick-actions-section">
-              <h3>Quick Actions</h3>
-              <div className="action-grid">
-                <button 
-                  className="action-card"
-                  onClick={handleImportVolunteers}
-                >
-                  <Users size={24} />
-                  <span>Import Volunteers</span>
-                </button>
-                <button 
-                  className="action-card"
-                  onClick={() => setActiveTab('training')}
-                >
-                  <BookOpen size={24} />
-                  <span>Manage Training</span>
-                </button>
-                <button 
-                  className="action-card"
-                  onClick={() => setActiveTab('pairing')}
-                >
-                  <Link2 size={24} />
-                  <span>Create Pairs</span>
-                </button>
-                <button 
-                  className="action-card"
-                  onClick={() => setActiveTab('clients')}
-                >
-                  <UserCheck size={24} />
-                  <span>Import Clients</span>
-                </button>
-                <button 
-                  className="action-card"
-                  onClick={() => setActiveTab('assignments')}
-                >
-                  <Target size={24} />
-                  <span>Create Assignments</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-
-        {activeTab === 'volunteers' && (
-          <div className="volunteers-tab">
-            <div className="volunteers-header">
-              <h3>Project Volunteers ({projectVolunteers.length})</h3>
-              <div className="header-actions">
-                <button 
-                  className="import-btn primary"
-                  onClick={() => setShowVolunteerImporter(true)}
-                >
-                  <Users size={16} />
-                  Import More Volunteers
-                </button>
-                {projectVolunteers.length > 0 && (
-                  <button 
-                    className="clear-btn danger"
-                    onClick={() => setShowClearConfirm(true)}
-                  >
-                    <Trash2 size={16} />
-                    Clear All Volunteers
-                  </button>
-                )}
-              </div>
-            </div>
-
-
-            {/* Pass refreshKey to VolunteerSelectionTable */}
-            <VolunteerSelectionTable 
-              projectId={project.id} 
-              refreshKey={refreshKey} 
-              onRefresh={() => {
-                loadProjectData();
-                setRefreshKey(prev => prev + 1);
-              }}
-            />
-          </div>
-        )}
-
-
-        {/* Add the Pairing tab content */}
-        {activeTab === 'pairing' && (
-          <div className="pairing-tab">
-            <div className="pairing-header">
-              <h3>Volunteer Pairing ({selectedVolunteers + waitlistedVolunteers} volunteers)</h3>
-              <div className="header-actions">
-                {selectedVolunteers === 0 && waitlistedVolunteers === 0 && (
-                  <button 
-                    className="import-btn primary"
-                    onClick={() => setActiveTab('volunteers')}
-                  >
-                    <Users size={16} />
-                    Select Volunteers First
-                  </button>
-                )}
-              </div>
-            </div>
-
-
-            {selectedVolunteers > 0 || waitlistedVolunteers > 0 ? (
-              <VolunteerPairingTab 
-                projectId={project.id} 
-                refreshKey={refreshKey} 
-                onRefresh={() => {
-                  loadProjectData();
-                  setRefreshKey(prev => prev + 1);
-                }}
-              />
-            ) : (
-              <div className="empty-pairing">
-                <Link2 size={64} className="empty-icon" />
-                <h3>No volunteers selected for pairing</h3>
-                <p>You need to select volunteers before you can create pairs.</p>
-                <button 
-                  className="btn-primary"
-                  onClick={() => setActiveTab('volunteers')}
-                >
-                  <Users size={16} />
-                  Go to Volunteers Tab
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
-
-        {/* Add the Training tab content */}
-        {activeTab === 'training' && (
-          <div className="training-tab">
-            <div className="training-header">
-              <h3>Training Day Management</h3>
-              <div className="header-actions">
-                {selectedVolunteers === 0 && waitlistedVolunteers === 0 && (
-                  <button 
-                    className="import-btn primary"
-                    onClick={() => setActiveTab('volunteers')}
-                  >
-                    <Users size={16} />
-                    Select Volunteers First
-                  </button>
-                )}
-              </div>
-            </div>
-
-
-            {selectedVolunteers > 0 || waitlistedVolunteers > 0 ? (
-              <TrainingDayTab 
-                projectId={project.id} 
-                refreshKey={refreshKey} 
-                onRefresh={() => {
-                  loadProjectData();
-                  setRefreshKey(prev => prev + 1);
-                }}
-              />
-            ) : (
-              <div className="empty-training">
-                <BookOpen size={64} className="empty-icon" />
-                <h3>No volunteers selected for training</h3>
-                <p>You need to select volunteers before you can manage their training.</p>
-                <button 
-                  className="btn-primary"
-                  onClick={() => setActiveTab('volunteers')}
-                >
-                  <Users size={16} />
-                  Go to Volunteers Tab
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
-
-        {activeTab === 'clients' && (
-          <ClientManagementTab 
-            projectId={id} 
-            refreshKey={refreshKey}
-            onImportComplete={handleImportComplete}
-            onRefresh={() => {
-              loadProjectData();
-              setRefreshKey(prev => prev + 1);
-            }}
-          />
-        )}
-
-
-        {/* Add the Assignments tab content */}
-        {activeTab === 'assignments' && (
-          <div className="assignments-tab">
-            <div className="assignments-header">
-              <div className="header-actions">
-                {(volunteerPairs.length === 0 || clientGroups.length === 0) && (
-                  <div className="prerequisites-warning">
-                    {volunteerPairs.length === 0 && (
-                      <button 
-                        className="import-btn primary"
-                        onClick={() => setActiveTab('pairing')}
-                      >
-                        <Link2 size={16} />
-                        Create Pairs First
-                      </button>
-                    )}
-                    {clientGroups.length === 0 && (
-                      <button 
-                        className="import-btn primary"
-                        onClick={() => setActiveTab('clients')}
-                      >
-                        <UserCheck size={16} />
-                        Create Client Groups First
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-
-
-            {volunteerPairs.length > 0 && clientGroups.length > 0 ? (
-              <AssignmentsTab 
-                projectId={project.id} 
-                refreshKey={refreshKey} 
-                onRefresh={() => {
-                  loadProjectData();
-                  setRefreshKey(prev => prev + 1);
-                }}
-              />
-            ) : (
-              <div className="empty-assignments">
-                <Target size={64} className="empty-icon" />
-                <h3>Prerequisites Not Met</h3>
-                <p>You need both volunteer pairs and client groups before creating assignments.</p>
-                <div className="prerequisites-list">
-                  {volunteerPairs.length === 0 && (
-                    <p className="prerequisite-item">
-                      • Create volunteer pairs first ({volunteerPairs.length} pairs available)
-                    </p>
-                  )}
-                  {clientGroups.length === 0 && (
-                    <p className="prerequisite-item">
-                      • Create client groups first ({clientGroups.length} groups available)
-                    </p>
-                  )}
-                </div>
-                <div className="prerequisite-actions">
-                  {volunteerPairs.length === 0 && (
-                    <button 
-                      className="btn-primary"
-                      onClick={() => setActiveTab('pairing')}
-                    >
-                      <Link2 size={16} />
-                      Go to Pairing Tab
-                    </button>
-                  )}
-                  {clientGroups.length === 0 && (
-                    <button 
-                      className="btn-primary"
-                      onClick={() => setActiveTab('clients')}
-                    >
-                      <UserCheck size={16} />
-                      Go to Clients Tab
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-
-      {/* Volunteer CSV Importer Modal */}
-      {showVolunteerImporter && (
-        <VolunteerCSVImporter 
-          projectId={project.id}
-          onImportComplete={handleImportComplete}
-          onClose={() => setShowVolunteerImporter(false)}
-        />
-      )}
-
+      {/* Tab Content */}
+      {renderTabContent()}
 
       {/* Clear Volunteers Confirmation Modal */}
       {showClearConfirm && (
         <div className="modal-overlay">
           <div className="modal confirm-modal">
-            <div className="modal-header">
-              <h3>Clear All Volunteers</h3>
-              <button 
-                className="close-btn" 
-                onClick={() => setShowClearConfirm(false)}
-                disabled={clearingVolunteers}
-              >
-                ×
-              </button>
-            </div>
             <div className="modal-content">
               <div className="warning-icon">
-                <AlertTriangle size={48} color="#f56565" />
+                <AlertTriangle size={48} color="#e53e3e" />
               </div>
-              <p>Are you sure you want to clear all <strong>{projectVolunteers.length} volunteers</strong> from this project?</p>
+              <h2>Clear All Volunteers?</h2>
+              <p>
+                Are you sure you want to clear all <strong>{projectVolunteers.length} volunteers</strong> from this project?
+              </p>
               <div className="warning-note">
                 <p><strong>Important:</strong></p>
                 <ul>
-                  <li>Volunteers who are <strong>only in this project</strong> will be <strong>completely deleted</strong></li>
-                  <li>Volunteers who are in <strong>other projects</strong> will only be <strong>removed from this project</strong></li>
+                  <li>Volunteers will be removed from this project</li>
+                  <li>Volunteers only in this project will be completely deleted</li>
+                  <li>Volunteers in other projects will remain available</li>
+                  <li>All pairings and training data will be lost</li>
                   <li>This action cannot be undone</li>
                 </ul>
               </div>
-            </div>
-
-
-            <div className="modal-actions">
-              <button 
-                className="cancel-btn"
-                onClick={() => setShowClearConfirm(false)}
-                disabled={clearingVolunteers}
-              >
-                Cancel
-              </button>
-              <button 
-                className="confirm-btn danger"
-                onClick={handleClearVolunteers}
-                disabled={clearingVolunteers}
-              >
-                {clearingVolunteers ? (
-                  <>
-                    <div className="spinner-small"></div>
-                    Clearing...
-                  </>
-                ) : (
-                  <>
-                    <Trash2 size={16} />
-                    Clear All Volunteers
-                  </>
-                )}
-              </button>
+              <div className="modal-actions">
+                <button 
+                  className="cancel-btn" 
+                  onClick={() => setShowClearConfirm(false)}
+                >
+                  Cancel
+                </button>
+                <button 
+                  className="confirm-btn danger"
+                  onClick={handleClearVolunteers}
+                  disabled={clearingVolunteers}
+                >
+                  {clearingVolunteers ? (
+                    <>
+                      <div className="spinner-small"></div>
+                      Clearing...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 size={16} />
+                      Clear All Volunteers
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -604,6 +648,5 @@ const ProjectDetail = () => {
     </div>
   );
 };
-
 
 export default ProjectDetail;
