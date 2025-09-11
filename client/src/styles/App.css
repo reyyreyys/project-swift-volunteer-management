@@ -5455,3 +5455,26 @@ body {
   width: 100% !important;
   max-width: none !important;
 }
+/* Fix Pairing Tab Content */
+.pairing-tab,
+.volunteer-pairing-tab {
+  width: 100% !important;
+  max-width: none !important;
+  display: block !important;
+}
+
+/* Ensure pairing content is visible */
+.pairing-layout,
+.pairing-table-container,
+.pairing-stats {
+  width: 100% !important;
+  max-width: none !important;
+  display: block !important;
+}
+
+/* Fix pairing table */
+.pairing-table {
+  width: 100% !important;
+  max-width: none !important;
+  table-layout: auto;
+}
