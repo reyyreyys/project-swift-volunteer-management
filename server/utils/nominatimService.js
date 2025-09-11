@@ -1,5 +1,5 @@
 // utils/nominatimService.js
-import axios from 'axios';
+const axios = require('axios');
 
 const NOMINATIM_BASE_URL = 'https://nominatim.openstreetmap.org';
 
@@ -8,7 +8,7 @@ const headers = {
   'User-Agent': 'YourAppName/1.0 (reyes_ng1260@yahoo.com)'
 };
 
-export const geocodeAddress = async (address) => {
+const geocodeAddress = async (address) => {
   try {
     const response = await axios.get(`${NOMINATIM_BASE_URL}/search`, {
       headers,
@@ -36,7 +36,7 @@ export const geocodeAddress = async (address) => {
   }
 };
 
-export const reverseGeocode = async (lat, lon) => {
+const reverseGeocode = async (lat, lon) => {
   try {
     const response = await axios.get(`${NOMINATIM_BASE_URL}/reverse`, {
       headers,
@@ -56,7 +56,7 @@ export const reverseGeocode = async (lat, lon) => {
 };
 
 // Calculate distance between two coordinates using Haversine formula
-export const calculateDistance = (lat1, lon1, lat2, lon2) => {
+const calculateDistance = (lat1, lon1, lat2, lon2) => {
   const R = 6371; // Radius of Earth in kilometers
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLon = (lon2 - lon1) * Math.PI / 180;
@@ -69,7 +69,7 @@ export const calculateDistance = (lat1, lon1, lat2, lon2) => {
 };
 
 // Group clients by proximity
-export const groupClientsByProximity = (clients, maxDistanceKm = 2) => {
+const groupClientsByProximity = (clients, maxDistanceKm = 2) => {
   const groups = [];
   const processed = new Set();
   
@@ -100,4 +100,12 @@ export const groupClientsByProximity = (clients, maxDistanceKm = 2) => {
   }
   
   return groups;
+};
+
+// Export all functions using CommonJS syntax
+module.exports = {
+  geocodeAddress,
+  reverseGeocode,
+  calculateDistance,
+  groupClientsByProximity
 };
