@@ -202,14 +202,6 @@ const ProjectDetail = () => {
           <Link2 size={16} />
           Pairing ({selectedVolunteers + waitlistedVolunteers})
         </button>
-        {/* Add the Training tab */}
-        <button 
-          className={`tab ${activeTab === 'training' ? 'active' : ''}`}
-          onClick={() => setActiveTab('training')}
-        >
-          <BookOpen size={16} />
-          Training ({needTrainingCount})
-        </button>
         <button 
           className={`tab ${activeTab === 'clients' ? 'active' : ''}`}
           onClick={() => setActiveTab('clients')}
@@ -217,13 +209,19 @@ const ProjectDetail = () => {
           <UserCheck size={16} />
           Clients ({projectClients.length})
         </button>
-        {/* Add the Assignments tab */}
         <button 
           className={`tab ${activeTab === 'assignments' ? 'active' : ''}`}
           onClick={() => setActiveTab('assignments')}
         >
           <Target size={16} />
           Assignments ({assignments.length})
+        </button>a
+        <button 
+          className={`tab ${activeTab === 'training' ? 'active' : ''}`}
+          onClick={() => setActiveTab('training')}
+        >
+          <BookOpen size={16} />
+          Training ({needTrainingCount})
         </button>
       </div>
 
