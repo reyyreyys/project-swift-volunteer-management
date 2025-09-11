@@ -1376,9 +1376,10 @@ body {
   font-size: 0.875rem;
   color: #856404;
 }
-/* Project Detail Page - Overview Tab */
+/* FIX: Remove or increase the width limit */
 .overview-tab {
-  max-width: 1000px;
+  max-width: none; /* or use 100% */
+  width: 100%;
 }
 
 /* Project Stats Cards - Side by Side */
@@ -5227,4 +5228,230 @@ body {
   border-radius: 12px;
   font-size: 0.75rem;
   font-weight: 600;
+}
+
+/* Enhanced styling for paired volunteers */
+.pairs-overview-table tr.is-paired {
+  background-color: #f8fafc;
+  border-left: 4px solid #059669;
+}
+
+.pairs-overview-table tr.is-paired.is-group {
+  background-color: #f0f9ff;
+  border-left: 4px solid #3b82f6;
+  font-weight: 600;
+}
+
+.pairs-overview-table tr.is-paired:nth-of-type(even) {
+  background-color: #f1f5f9;
+}
+
+/* Add a subtle separator between pairs */
+.pairs-overview-table tr.is-paired:last-of-type {
+  border-bottom: 2px solid #e2e8f0;
+  margin-bottom: 0.5rem;
+}
+
+/* Style for single volunteers */
+.pairs-overview-table tr:not(.is-paired) {
+  background-color: #fffbeb;
+  border-left: 4px solid #fbbf24;
+}
+
+.pairs-overview-table tr:not(.is-paired).is-group {
+  background-color: #fef3c7;
+  border-left: 4px solid #f59e0b;
+}
+/* Pairs Overview Table Sections */
+.pairs-section {
+  margin-bottom: 2rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: white;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.pairs-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1.25rem;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-bottom: 1px solid #e2e8f0;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.pairs-section-header svg {
+  color: #667eea;
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.pairs-section-content {
+  padding: 0;
+}
+
+.section-description {
+  padding: 1rem 1.25rem;
+  color: #6b7280;
+  font-size: 0.875rem;
+  background: #f8fafc;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.pairs-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.pairs-table th {
+  background: #f8fafc;
+  padding: 1rem 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  color: #374151;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.pairs-table td {
+  padding: 0.75rem;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: top;
+}
+
+/* Paired volunteers styling */
+.pairs-table tr.paired-volunteer {
+  background: #f0f9ff;
+  border-left: 4px solid #3b82f6;
+}
+
+.pairs-table tr.paired-volunteer:nth-of-type(even) {
+  background: #f8fafc;
+}
+
+/* Single volunteers styling */
+.pairs-table tr.single-volunteer {
+  background: #fffbeb;
+  border-left: 4px solid #f59e0b;
+}
+
+.pair-separator {
+  height: 2px;
+  background: #e2e8f0;
+}
+
+/* Pairs Overview Full Width Styles */
+.pairs-overview-container {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pairs-section {
+  width: 100%;
+  max-width: none;
+  margin-bottom: 2rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: white;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.pairs-section-content {
+  padding: 0;
+  width: 100%;
+}
+
+.pairs-table {
+  width: 100%;
+  min-width: 100%;
+  border-collapse: collapse;
+  table-layout: auto; /* Allow columns to expand */
+}
+
+/* Specific column width distribution */
+.pairs-table th:nth-child(1), /* Name */
+.pairs-table td:nth-child(1) { 
+  width: 20%;
+  min-width: 150px;
+}
+
+.pairs-table th:nth-child(2), /* Contact */
+.pairs-table td:nth-child(2) { 
+  width: 15%;
+  min-width: 120px;
+}
+
+.pairs-table th:nth-child(3), /* Email */
+.pairs-table td:nth-child(3) { 
+  width: 20%;
+  min-width: 150px;
+}
+
+.pairs-table th:nth-child(4), /* Shirt Size */
+.pairs-table td:nth-child(4) { 
+  width: 10%;
+  min-width: 80px;
+}
+
+.pairs-table th:nth-child(5), /* Pairing */
+.pairs-table td:nth-child(5) { 
+  width: 25%;
+  min-width: 180px;
+}
+
+.pairs-table th:nth-child(6), /* Status */
+.pairs-table td:nth-child(6) { 
+  width: 10%;
+  min-width: 80px;
+}
+
+/* Ensure the container div uses full width */
+.overview-tab .pairs-overview-container {
+  width: 100%;
+  max-width: none;
+}
+
+/* Override any width constraints from parent components */
+.project-content .pairs-overview-container,
+.volunteers-tab .pairs-overview-container {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+/* ADD these overrides to your CSS */
+
+/* Fix the project content containers */
+.project-content {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+}
+
+/* Fix overview tab specifically */
+.overview-tab {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 auto;
+}
+
+/* Ensure all tab content uses full width */
+.volunteers-tab,
+.pairing-tab,
+.training-tab,
+.clients-tab,
+.assignments-tab {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+/* Fix any container width restrictions */
+.project-detail-container,
+.project-wrapper {
+  width: 100% !important;
+  max-width: none !important;
 }

@@ -26,10 +26,6 @@ const PairsOverviewTable = ({ volunteers, pairs }) => {
   // Create a map of volunteer pairs for easy lookup
   const pairMap = {};
   
-  // Debug: log the data structure
-  console.log('Raw pairs data:', pairs);
-  console.log('Raw volunteers data:', volunteers);
-  
   pairs.forEach(pair => {
     if (pair.volunteer1 && pair.volunteer2) {
       // Get names from the included volunteer objects
@@ -44,134 +40,262 @@ const PairsOverviewTable = ({ volunteers, pairs }) => {
       pairMap[pair.volunteer1.id] = { 
         partnerId: pair.volunteer2.id, 
         pairName: pair.name || `${volunteer1Name} & ${volunteer2Name}`,
-        partnerName: volunteer2Name
+        partnerName: volunteer2Name,
+        pairId: pair.id || `${pair.volunteer1.id}-${pair.volunteer2.id}`
       };
       pairMap[pair.volunteer2.id] = { 
         partnerId: pair.volunteer1.id, 
         pairName: pair.name || `${volunteer1Name} & ${volunteer2Name}`,
-        partnerName: volunteer1Name
+        partnerName: volunteer1Name,
+        pairId: pair.id || `${pair.volunteer1.id}-${pair.volunteer2.id}`
       };
     }
   });
 
-  // Filter for selected volunteers and sort: groups first, then individuals
-  const selectedVolunteers = volunteers
-    .filter(pv => 
-      pv.status && (pv.status.toLowerCase() === 'selected' || pv.status.toUpperCase() === 'SELECTED')
-    )
-    .sort((a, b) => {
-      // Sort by group type: groups first, then individuals
-      const aIsGroup = a.volunteer && (
-        a.volunteer.groupType === 'group' || 
-        a.volunteer.type === 'group' ||
-        a.volunteer.groupName || 
-        a.volunteer.group
-      );
-      const bIsGroup = b.volunteer && (
-        b.volunteer.groupType === 'group' || 
-        b.volunteer.type === 'group' ||
-        b.volunteer.groupName || 
-        b.volunteer.group
+  // Filter for selected volunteers
+  const selectedVolunteers = volunteers.filter(pv => 
+    pv.status && (pv.status.toLowerCase() === 'selected' || pv.status.toUpperCase() === 'SELECTED')
+  );
+
+  // Group volunteers by pairs and singles
+  const pairedVolunteers = [];
+  const singleVolunteers = [];
+  const processedVolunteers = new Set();
+
+  selectedVolunteers.forEach(projectVolunteer => {
+    const volunteerId = projectVolunteer.volunteer.id;
+    
+    if (processedVolunteers.has(volunteerId)) {
+      return; // Skip if already processed as part of a pair
+    }
+    
+    const pairInfo = pairMap[volunteerId];
+    
+    if (pairInfo) {
+      // Find the partner volunteer
+      const partnerVolunteer = selectedVolunteers.find(pv => 
+        pv.volunteer.id === pairInfo.partnerId
       );
       
-      if (aIsGroup && !bIsGroup) return -1; // a comes first
-      if (!aIsGroup && bIsGroup) return 1;  // b comes first
-      
-      // If both are same type, sort alphabetically by name
-      const aName = a.volunteer.firstName || a.volunteer.name || '';
-      const bName = b.volunteer.firstName || b.volunteer.name || '';
-      return aName.localeCompare(bName);
-    });
+      if (partnerVolunteer) {
+        // Add both volunteers as a pair
+        pairedVolunteers.push({
+          type: 'pair',
+          pairId: pairInfo.pairId,
+          volunteers: [projectVolunteer, partnerVolunteer],
+          pairName: pairInfo.pairName
+        });
+        
+        // Mark both as processed
+        processedVolunteers.add(volunteerId);
+        processedVolunteers.add(pairInfo.partnerId);
+      } else {
+        // Partner not found in selected volunteers, treat as single
+        singleVolunteers.push(projectVolunteer);
+        processedVolunteers.add(volunteerId);
+      }
+    } else {
+      // No pair info, treat as single
+      singleVolunteers.push(projectVolunteer);
+      processedVolunteers.add(volunteerId);
+    }
+  });
 
-  console.log('Sorted selected volunteers:', selectedVolunteers);
-  console.log('Pair map:', pairMap);
+  // Sort pairs by group status (groups first), then by name
+  pairedVolunteers.sort((a, b) => {
+    const aHasGroup = a.volunteers.some(v => 
+      v.volunteer.groupType === 'group' || v.volunteer.type === 'group' ||
+      v.volunteer.groupName || v.volunteer.group
+    );
+    const bHasGroup = b.volunteers.some(v => 
+      v.volunteer.groupType === 'group' || v.volunteer.type === 'group' ||
+      v.volunteer.groupName || v.volunteer.group
+    );
+    
+    if (aHasGroup && !bHasGroup) return -1;
+    if (!aHasGroup && bHasGroup) return 1;
+    
+    return a.pairName.localeCompare(b.pairName);
+  });
 
-  return (
+  // Sort single volunteers (groups first)
+  singleVolunteers.sort((a, b) => {
+    const aIsGroup = a.volunteer && (
+      a.volunteer.groupType === 'group' || a.volunteer.type === 'group' ||
+      a.volunteer.groupName || a.volunteer.group
+    );
+    const bIsGroup = b.volunteer && (
+      b.volunteer.groupType === 'group' || b.volunteer.type === 'group' ||
+      b.volunteer.groupName || b.volunteer.group
+    );
+    
+    if (aIsGroup && !bIsGroup) return -1;
+    if (!aIsGroup && bIsGroup) return 1;
+    
+    const aName = a.volunteer.firstName || a.volunteer.name || '';
+    const bName = b.volunteer.firstName || b.volunteer.name || '';
+    return aName.localeCompare(bName);
+  });
+
+  // Helper function to render a volunteer row
+  const renderVolunteerRow = (projectVolunteer, index, isPaired = false, pairInfo = null) => {
+    const volunteer = projectVolunteer.volunteer;
+    const volunteerId = volunteer.id;
+    
+    const isGroup = volunteer.groupType === 'group' || 
+                   volunteer.type === 'group' ||
+                   volunteer.groupName || 
+                   volunteer.group;
+    
+    return (
+      <tr 
+        key={`${volunteerId}-${index}`}
+        className={`${pairInfo ? 'has-pair' : ''} ${isGroup ? 'is-group' : ''} ${isPaired ? 'is-paired' : ''}`}
+      >
+        <td className="name-cell">
+          <div className="volunteer-name">
+            <span className="volunteer-type-icon">
+              {isGroup ? '👥' : '👤'}
+            </span>
+            {volunteer.firstName && volunteer.lastName 
+              ? `${volunteer.firstName} ${volunteer.lastName}`
+              : volunteer.name || volunteer.firstName || volunteer.fullName || 'Unknown'}
+            {(volunteer.hasExperience || volunteer.experience) && <span className="experience-star">⭐</span>}
+            {isGroup && (volunteer.groupName || volunteer.group) && (
+              <span className="group-indicator"> (Group: {volunteer.groupName || volunteer.group})</span>
+            )}
+          </div>
+        </td>
+        <td>{volunteer.contact || volunteer.phone || volunteer.phoneNumber || 'N/A'}</td>
+        <td className="email-cell">{volunteer.email || 'N/A'}</td>
+        <td className="shirt-size-cell">
+          <span className="shirt-size-badge">
+            {volunteer.shirtSize || volunteer.tshirtSize || 'N/A'}
+          </span>
+        </td>
+        <td className="pairing-cell">
+          {pairInfo ? (
+            <div className="pair-info">
+              <div className="partner-name">With: {pairInfo.partnerName}</div>
+              <div className="pair-name">{pairInfo.pairName}</div>
+            </div>
+          ) : (
+            <span className="no-pair">No pairing</span>
+          )}
+        </td>
+        <td>
+          <span className="status-badge status-selected">
+            {projectVolunteer.status || 'SELECTED'}
+          </span>
+        </td>
+      </tr>
+    );
+  };
+
+   return (
     <div className="pairs-overview-container">
-      <div className="pairs-overview-header">
-        <h4>Selected Volunteers & Pairings</h4>
-        <div className="pairs-stats">
-          <span>{selectedVolunteers.length} Selected</span>
-          <span>{pairs.length} Pairs</span>
-        </div>
-      </div>
-      
-      <div className="table-container">
-        <table className="pairs-overview-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Contact</th>
-              <th>Email</th>
-              <th>Shirt Size</th>
-              <th>Pairing</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {selectedVolunteers.map((projectVolunteer, index) => {
-              // Access the nested volunteer data
-              const volunteer = projectVolunteer.volunteer;
-              const volunteerId = volunteer.id;
-              const pairInfo = pairMap[volunteerId];
-              
-              // Check if this volunteer is part of a group
-              const isGroup = volunteer.groupType === 'group' || 
-                             volunteer.type === 'group' ||
-                             volunteer.groupName || 
-                             volunteer.group;
-              
-              return (
-                <tr 
-                  key={volunteerId || index}
-                  className={`${pairInfo ? 'has-pair' : ''} ${isGroup ? 'is-group' : ''}`}
-                >
-                  <td className="name-cell">
-                    <div className="volunteer-name">
-                      <span className="volunteer-type-icon">
-                        {isGroup ? '👥' : '👤'}
-                      </span>
-                      {/* Build full name */}
-                      {volunteer.firstName && volunteer.lastName 
-                        ? `${volunteer.firstName} ${volunteer.lastName}`
-                        : volunteer.name || volunteer.firstName || volunteer.fullName || 'Unknown'}
-                      {(volunteer.hasExperience || volunteer.experience) && <span className="experience-star">⭐</span>}
-                      {/* Show group name if available */}
-                      {isGroup && (volunteer.groupName || volunteer.group) && (
-                        <span className="group-indicator"> (Group: {volunteer.groupName || volunteer.group})</span>
-                      )}
-                    </div>
-                  </td>
-                  <td>{volunteer.contact || volunteer.phone || volunteer.phoneNumber || 'N/A'}</td>
-                  <td className="email-cell">{volunteer.email || 'N/A'}</td>
-                  <td className="shirt-size-cell">
-                    <span className="shirt-size-badge">
-                      {volunteer.shirtSize || volunteer.tshirtSize || 'N/A'}
-                    </span>
-                  </td>
-                  <td className="pairing-cell">
-                    {pairInfo ? (
-                      <div className="pair-info">
-                        <div className="partner-name">With: {pairInfo.partnerName}</div>
-                        <div className="pair-name">{pairInfo.pairName}</div>
-                      </div>
-                    ) : (
-                      <span className="no-pair">No pairing</span>
-                    )}
-                  </td>
-                  <td>
-                    <span className="status-badge status-selected">
-                      {projectVolunteer.status || 'SELECTED'}
-                    </span>
-                  </td>
+      {/* Paired Volunteers Section */}
+      {pairedVolunteers.length > 0 && (
+        <div className="pairs-section">
+          <div className="pairs-section-header">
+            <Link2 />
+            <span>Paired Volunteers ({pairedVolunteers.length} pairs)</span>
+          </div>
+          <div className="section-description">
+            Volunteers who have been paired together for the project.
+          </div>
+          <div className="pairs-section-content">
+            <table className="pairs-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Contact</th>
+                  <th>Email</th>
+                  <th>Shirt Size</th>
+                  <th>Pairing</th>
+                  <th>Status</th>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+              </thead>
+              <tbody>
+                {pairedVolunteers.map((pairGroup, pairIndex) => (
+                  <React.Fragment key={`pair-${pairIndex}`}>
+                    {pairGroup.volunteers.map((projectVolunteer, volIndex) => {
+                      const pairInfo = pairMap[projectVolunteer.volunteer.id];
+                      return renderVolunteerRow(
+                        projectVolunteer, 
+                        `${pairIndex}-${volIndex}`, 
+                        true, 
+                        pairInfo,
+                        'paired-volunteer'
+                      );
+                    })}
+                    {/* Add separator between pairs */}
+                    {pairIndex < pairedVolunteers.length - 1 && (
+                      <tr className="pair-separator">
+                        <td colSpan="6"></td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Single Volunteers Section */}
+      {singleVolunteers.length > 0 && (
+        <div className="pairs-section">
+          <div className="pairs-section-header">
+            <Users />
+            <span>Individual Volunteers ({singleVolunteers.length})</span>
+          </div>
+          <div className="section-description">
+            Selected volunteers who are not currently paired.
+          </div>
+          <div className="pairs-section-content">
+            <table className="pairs-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Contact</th>
+                  <th>Email</th>
+                  <th>Shirt Size</th>
+                  <th>Pairing</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {singleVolunteers.map((projectVolunteer, index) => 
+                  renderVolunteerRow(
+                    projectVolunteer, 
+                    `single-${index}`, 
+                    false, 
+                    null,
+                    'single-volunteer'
+                  )
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Empty State */}
+      {pairedVolunteers.length === 0 && singleVolunteers.length === 0 && (
+        <div className="pairs-section">
+          <div className="pairs-section-header">
+            <AlertTriangle />
+            <span>No Selected Volunteers</span>
+          </div>
+          <div className="section-description">
+            No volunteers have been selected for this project yet.
+          </div>
+        </div>
+      )}
     </div>
   );
+
 };
 
 
