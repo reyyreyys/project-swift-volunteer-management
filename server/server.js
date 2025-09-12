@@ -2506,22 +2506,15 @@ app.post('/api/projects/:id/clients/auto-group', authenticateToken, checkProject
 // ================================
 
 // Get client groups for a project
+// In your server.js, update the client-groups endpoint:
 app.get('/api/projects/:id/client-groups', authenticateToken, checkProjectAccess, async (req, res) => {
   try {
-    // Debug: Check what models are available
-    // console.log('Prisma models:', Object.keys(prisma).filter(key => !key.startsWith('$')));
-    // console.log('clientGroup model:', prisma.clientGroup);
-    
-    if (!prisma.clientGroup) {
-      return res.status(500).json({ error: 'ClientGroup model not found in Prisma Client' });
-    }
-
     const groups = await prisma.clientGroup.findMany({
       where: { projectId: req.params.id },
       include: {
         groupClients: {
           include: {
-            client: true  // ✅ Fixed: Added `: true`
+            client: true // Include the actual client data
           },
           orderBy: { priority: 'asc' }
         }
@@ -3122,6 +3115,169 @@ app.delete('/api/projects/:id/client-groups/:groupId/clients/:clientId', authent
   } catch (error) {
     console.error('Remove client from group error:', error);
     res.status(500).json({ error: 'Failed to remove client from group' });
+  }
+});
+
+// ================================
+// PROJECT FINALISATION
+// ================================
+
+// Finalise project - apply replacements and remove non-participating volunteers
+app.post('/api/projects/:id/finalise', authenticateToken, checkProjectAccess, async (req, res) => {
+  try {
+    if (req.userPermission === 'VIEW') {
+      return res.status(403).json({ error: 'Insufficient permissions to finalise project' });
+    }
+
+    const projectId = req.params.id;
+    const { replacements, finalAssignments } = req.body;
+
+    await prisma.$transaction(async (tx) => {
+      // Step 1: Apply replacements by updating volunteer pairs
+      if (replacements && Object.keys(replacements).length > 0) {
+        for (const [key, replacementVolunteerId] of Object.entries(replacements)) {
+          const [pairId, originalVolunteerId] = key.split('-');
+          
+          // Find the pair and determine which volunteer to replace
+          const pair = await tx.volunteerPair.findUnique({
+            where: { id: pairId }
+          });
+          
+          if (pair) {
+            const updateData = {};
+            if (pair.volunteer1Id === originalVolunteerId) {
+              updateData.volunteer1Id = replacementVolunteerId;
+            } else if (pair.volunteer2Id === originalVolunteerId) {
+              updateData.volunteer2Id = replacementVolunteerId;
+            }
+            
+            if (Object.keys(updateData).length > 0) {
+              await tx.volunteerPair.update({
+                where: { id: pairId },
+                data: updateData
+              });
+            }
+          }
+        }
+      }
+
+      // Step 2: Get all volunteers currently participating in final assignments
+      const participatingVolunteerIds = new Set();
+      
+      // Get updated pairs after replacements
+      const updatedPairs = await tx.volunteerPair.findMany({
+        where: { 
+          projectId: projectId,
+          isActive: true 
+        }
+      });
+      
+      // Add all volunteers from active pairs to participating set
+      updatedPairs.forEach(pair => {
+        participatingVolunteerIds.add(pair.volunteer1Id);
+        participatingVolunteerIds.add(pair.volunteer2Id);
+      });
+
+      // Step 3: Remove volunteers who are not participating
+      const allProjectVolunteers = await tx.projectVolunteer.findMany({
+        where: { projectId: projectId },
+        select: { id: true, volunteerId: true }
+      });
+
+      const volunteersToRemove = allProjectVolunteers.filter(pv => 
+        !participatingVolunteerIds.has(pv.volunteerId)
+      );
+
+      // Step 4: Delete non-participating project volunteer relationships
+      if (volunteersToRemove.length > 0) {
+        const projectVolunteerIdsToRemove = volunteersToRemove.map(pv => pv.id);
+        
+        await tx.projectVolunteer.deleteMany({
+          where: {
+            id: { in: projectVolunteerIdsToRemove }
+          }
+        });
+      }
+
+      // Step 5: Check for volunteers that are now only in this project after removal
+      // and delete them completely if they're not in any other projects
+      const volunteerIdsToCheck = volunteersToRemove.map(pv => pv.volunteerId);
+      
+      if (volunteerIdsToCheck.length > 0) {
+        // Find volunteers that are only in this project
+        const volunteersOnlyInThisProject = await tx.volunteer.findMany({
+          where: {
+            id: { in: volunteerIdsToCheck }
+          },
+          include: {
+            projectVolunteers: {
+              select: { projectId: true }
+            }
+          }
+        });
+
+        const volunteerIdsToCompletelyDelete = volunteersOnlyInThisProject
+          .filter(v => v.projectVolunteers.length === 0) // No project relationships left
+          .map(v => v.id);
+
+        if (volunteerIdsToCompletelyDelete.length > 0) {
+          await tx.volunteer.deleteMany({
+            where: {
+              id: { in: volunteerIdsToCompletelyDelete }
+            }
+          });
+        }
+      }
+
+      // Step 6: Update project status or add finalisation metadata
+      await tx.project.update({
+        where: { id: projectId },
+        data: {
+          settings: {
+            ...req.project.settings,
+            finalised: true,
+            finalisedAt: new Date().toISOString(),
+            finalisedBy: req.user.userId
+          }
+        }
+      });
+
+      // Step 7: Log the activity
+      await tx.activityLog.create({
+        data: {
+          userId: req.user.userId,
+          projectId: projectId,
+          action: 'finalised_project',
+          details: {
+            totalAssignments: finalAssignments?.length || 0,
+            replacementsApplied: Object.keys(replacements || {}).length,
+            volunteersRemoved: volunteersToRemove.length,
+            participatingVolunteers: participatingVolunteerIds.size
+          }
+        }
+      });
+
+      return {
+        success: true,
+        message: 'Project finalised successfully',
+        removedVolunteers: volunteersToRemove.length,
+        participatingVolunteers: participatingVolunteerIds.size,
+        replacements: Object.keys(replacements || {}).length
+      };
+    });
+
+    res.json({
+      success: true,
+      message: 'Project finalised successfully! Non-participating volunteers have been removed.',
+    });
+
+  } catch (error) {
+    console.error('Error finalising project:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to finalise project',
+      details: error.message 
+    });
   }
 });
 

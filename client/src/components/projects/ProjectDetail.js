@@ -11,7 +11,8 @@ import {
   Trash2,
   Link2,
   BookOpen,
-  Target
+  Target,
+  CheckCircle  
 } from 'lucide-react';
 
 import VolunteerCSVImporter from '../volunteers/VolunteerCSVImporter';
@@ -20,6 +21,7 @@ import VolunteerPairingTab from '../volunteers/VolunteerPairingTab';
 import TrainingDayTab from '../volunteers/TrainingDayTab';
 import ClientManagementTab from '../clients/ClientManagementTab';
 import AssignmentsTab from '../assignments/AssignmentsTab';
+import FinalGroupingsTab from '../final/FinalGroupingsTab'; // Add this import
 
 // Add the PairsOverviewTable component
 const PairsOverviewTable = ({ volunteers, pairs }) => {
@@ -295,10 +297,7 @@ const PairsOverviewTable = ({ volunteers, pairs }) => {
       )}
     </div>
   );
-
 };
-
-
 
 const ProjectDetail = () => {
   const { id } = useParams();
@@ -331,36 +330,41 @@ const ProjectDetail = () => {
     }
   };
 
-// In the loadProjectData function, change the pairs API call:
-const loadProjectData = async () => {
-  try {
-    const [volunteersRes, clientsRes, pairsRes, groupsRes, assignmentsRes] = await Promise.all([
-      axios.get(`/projects/${id}/volunteers-detailed`).catch(() => ({ data: [] })),
-      axios.get(`/projects/${id}/clients`).catch(() => ({ data: [] })),
-      // Use the correct API endpoint that includes volunteer details:
-      axios.get(`/api/projects/${id}/volunteer-pairs`).catch(() => ({ data: [] })),
-      axios.get(`/projects/${id}/client-groups`).catch(() => ({ data: [] })),
-      axios.get(`/projects/${id}/assignments`).catch(() => ({ data: [] }))
-    ]);
+  // FIXED: Updated loadProjectData to use consistent API endpoints
+  const loadProjectData = async () => {
+    try {
+      const [volunteersRes, clientsRes, pairsRes, groupsRes, assignmentsRes] = await Promise.all([
+        axios.get(`/projects/${id}/volunteers-detailed`),
+        axios.get(`/projects/${id}/clients`),
+        axios.get(`/projects/${id}/pairs`), // Fixed: Use consistent endpoint
+        axios.get(`/projects/${id}/client-groups`),
+        axios.get(`/projects/${id}/assignments`)
+      ]);
 
-    setProjectVolunteers(volunteersRes.data);
-    setProjectClients(clientsRes.data);
-    setVolunteerPairs(pairsRes.data);
-    setClientGroups(groupsRes.data);
-    setAssignments(assignmentsRes.data);
-  } catch (error) {
-    console.error('Error loading project data:', error);
-  }
-};
+      console.log('Pairs API Response:', pairsRes.data); // Debug log
 
+      setProjectVolunteers(volunteersRes.data || []);
+      setProjectClients(clientsRes.data || []);
+      setVolunteerPairs(pairsRes.data || []); // This should now update properly
+      setClientGroups(groupsRes.data || []);
+      setAssignments(assignmentsRes.data || []);
+    } catch (error) {
+      console.error('Error loading project data:', error);
+      // Set defaults only on error
+      setProjectVolunteers([]);
+      setProjectClients([]);
+      setVolunteerPairs([]);
+      setClientGroups([]);
+      setAssignments([]);
+    }
+  };
 
   const handleImportComplete = (result) => {
     console.log('Import completed:', result);
     setShowVolunteerImporter(false);
-    loadProjectData();
-    setRefreshKey(prev => prev + 1);
+    // Force full page refresh
+    window.location.reload();
   };
-
   const handleImportVolunteers = () => {
     setShowVolunteerImporter(true);
     setActiveTab('volunteers');
@@ -581,23 +585,45 @@ const loadProjectData = async () => {
         );
         
       case 'volunteers':
-        return (
-          <>
-            {showVolunteerImporter && (
-              <VolunteerCSVImporter 
-                projectId={id}
-                onComplete={handleImportComplete}
-                onCancel={() => setShowVolunteerImporter(false)}
-              />
-            )}
-            <VolunteerSelectionTable 
-              key={refreshKey}
-              projectId={id} 
-              onImport={handleImportVolunteers}
-              onClear={() => setShowClearConfirm(true)}
-            />
-          </>
-        );
+              return (
+                <div className="volunteers-tab">
+                  <div className="volunteers-header">
+                    <h3>Project Volunteers ({projectVolunteers.length})</h3>
+                    <div className="header-actions">
+                      <button 
+                        className="import-btn primary"
+                        onClick={() => setShowVolunteerImporter(true)}
+                      >
+                        <Users size={16} />
+                        Import More Volunteers
+                      </button>
+                      {projectVolunteers.length > 0 && (
+                        <button 
+                          className="clear-btn danger"
+                          onClick={() => setShowClearConfirm(true)}
+                        >
+                          <Trash2 size={16} />
+                          Clear All Volunteers
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {showVolunteerImporter && (
+                    <VolunteerCSVImporter 
+                      projectId={id}
+                      onImportComplete={handleImportComplete}
+                      onClose={() => setShowVolunteerImporter(false) && handleImportComplete()}  // Changed from onCancel to onClose
+                    />
+                  )}
+                  <VolunteerSelectionTable 
+                    key={refreshKey}
+                    projectId={id} 
+                    onImport={handleImportVolunteers}
+                    onClear={() => setShowClearConfirm(true)}
+                  />
+                </div>
+              );
         
       case 'pairing':
         return (
@@ -640,7 +666,14 @@ const loadProjectData = async () => {
             onAssignmentsUpdate={loadProjectData}
           />
         );
-        
+      case 'final':
+          return (
+            <FinalGroupingsTab 
+              key={refreshKey}
+              projectId={id}
+            />
+          );
+
       default:
         return <div>Tab not found</div>;
     }
@@ -693,13 +726,6 @@ const loadProjectData = async () => {
           Pairing ({volunteerPairs.length})
         </button>
         <button 
-          className={`tab ${activeTab === 'training' ? 'active' : ''}`}
-          onClick={() => setActiveTab('training')}
-        >
-          <BookOpen size={16} />
-          Training Day
-        </button>
-        <button 
           className={`tab ${activeTab === 'clients' ? 'active' : ''}`}
           onClick={() => setActiveTab('clients')}
         >
@@ -712,6 +738,20 @@ const loadProjectData = async () => {
         >
           <Target size={16} />
           Assignments ({assignments.length})
+        </button>
+                <button 
+          className={`tab ${activeTab === 'training' ? 'active' : ''}`}
+          onClick={() => setActiveTab('training')}
+        >
+          <BookOpen size={16} />
+          Training Day
+        </button>
+        <button 
+          className={`tab ${activeTab === 'final' ? 'active' : ''}`}
+          onClick={() => setActiveTab('final')}
+        >
+          <CheckCircle size={16} />
+          Final Groupings
         </button>
       </div>
 
