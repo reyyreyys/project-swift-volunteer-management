@@ -358,46 +358,56 @@ app.delete('/api/projects/:id/volunteers', authenticateToken, checkProjectAccess
       .map(pv => pv.volunteerId)
       .filter(id => id != null);
 
-    // Step 2: Delete volunteer pairs for this project FIRST
-    const deletedPairsResult = await prisma.volunteerPair.deleteMany({
-      where: { projectId: projectId }
-    });
-
-    // Step 3: Delete assignments for this project (if any reference volunteer pairs)
-    const deletedAssignmentsResult = await prisma.assignment.deleteMany({
-      where: { projectId: projectId }
-    });
-
-    // Step 4: Delete all project-volunteer relationships for this project
-    const projectVolunteerResult = await prisma.projectVolunteer.deleteMany({
-      where: { projectId: projectId }
-    });
-
-    // Step 5: Delete volunteers that were only in this project (only if we have valid IDs)
-    let deletedVolunteersResult = { count: 0 };
-    if (volunteerIdsToCompletelyDelete.length > 0) {
-      console.log('Deleting volunteers with IDs:', volunteerIdsToCompletelyDelete); // Debug log
-      
-      deletedVolunteersResult = await prisma.volunteer.deleteMany({
-        where: { 
-          id: { 
-            in: volunteerIdsToCompletelyDelete 
-          } 
-        }
+    // Use a transaction to ensure all deletions succeed or fail together
+    const result = await prisma.$transaction(async (tx) => {
+      // Step 2: Delete assignments for this project FIRST (they reference volunteer pairs)
+      const deletedAssignmentsResult = await tx.assignment.deleteMany({
+        where: { projectId: projectId }
       });
-    }
 
-    // Step 6: Log the action
+      // Step 3: Delete volunteer pairs for this project (now safe after assignments are deleted)
+      const deletedPairsResult = await tx.volunteerPair.deleteMany({
+        where: { projectId: projectId }
+      });
+
+      // Step 4: Delete all project-volunteer relationships for this project
+      const projectVolunteerResult = await tx.projectVolunteer.deleteMany({
+        where: { projectId: projectId }
+      });
+
+      // Step 5: Delete volunteers that were only in this project (only if we have valid IDs)
+      let deletedVolunteersResult = { count: 0 };
+      if (volunteerIdsToCompletelyDelete.length > 0) {
+        console.log('Deleting volunteers with IDs:', volunteerIdsToCompletelyDelete); // Debug log
+        
+        deletedVolunteersResult = await tx.volunteer.deleteMany({
+          where: { 
+            id: { 
+              in: volunteerIdsToCompletelyDelete 
+            } 
+          }
+        });
+      }
+
+      return {
+        deletedAssignmentsResult,
+        deletedPairsResult,
+        projectVolunteerResult,
+        deletedVolunteersResult
+      };
+    });
+
+    // Step 6: Log the action (outside the transaction)
     await prisma.activityLog.create({
       data: {
         userId: req.user.userId,
         projectId: projectId,
         action: 'cleared_project_volunteers',
         details: { 
-          removedFromProject: projectVolunteerResult.count,
-          completelyDeleted: deletedVolunteersResult.count,
-          deletedPairs: deletedPairsResult.count,
-          deletedAssignments: deletedAssignmentsResult.count,
+          removedFromProject: result.projectVolunteerResult.count,
+          completelyDeleted: result.deletedVolunteersResult.count,
+          deletedPairs: result.deletedPairsResult.count,
+          deletedAssignments: result.deletedAssignmentsResult.count,
           volunteerIdsDeleted: volunteerIdsToCompletelyDelete
         }
       }
@@ -405,11 +415,11 @@ app.delete('/api/projects/:id/volunteers', authenticateToken, checkProjectAccess
 
     res.json({ 
       success: true, 
-      message: `Cleared ${projectVolunteerResult.count} volunteers from project. ${deletedVolunteersResult.count} volunteers were completely deleted as they were only in this project. Also removed ${deletedPairsResult.count} pairs and ${deletedAssignmentsResult.count} assignments.`,
-      removedFromProject: projectVolunteerResult.count,
-      completelyDeleted: deletedVolunteersResult.count,
-      deletedPairs: deletedPairsResult.count,
-      deletedAssignments: deletedAssignmentsResult.count
+      message: `Cleared ${result.projectVolunteerResult.count} volunteers from project. ${result.deletedVolunteersResult.count} volunteers were completely deleted as they were only in this project. Also removed ${result.deletedPairsResult.count} pairs and ${result.deletedAssignmentsResult.count} assignments.`,
+      removedFromProject: result.projectVolunteerResult.count,
+      completelyDeleted: result.deletedVolunteersResult.count,
+      deletedPairs: result.deletedPairsResult.count,
+      deletedAssignments: result.deletedAssignmentsResult.count
     });
 
   } catch (error) {
@@ -421,6 +431,7 @@ app.delete('/api/projects/:id/volunteers', authenticateToken, checkProjectAccess
     });
   }
 });
+
 
 
 

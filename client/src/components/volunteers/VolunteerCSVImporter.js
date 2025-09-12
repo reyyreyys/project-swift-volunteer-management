@@ -394,7 +394,7 @@ if (memberName) groupMembers.push(memberName.trim());
 
   const downloadTemplate = () => {
     const template = `Timestamp,First Name,Last Name,Contact Number,Email,Age,Are you able to commit time for house visits at elderly HoME+ clients between 14–29 June 2025?,Please indicate your availability for an in-person training & briefing on 1 Jun (Sun) 12pm - 4pm.,Please list the languages that you are fluent in,Which region of Singapore do you live/frequent?,Are you comfortable to travel outside of your preferred region for house visits?,Do you have experience in house visits, door-to-door survey, DRR, befriending?,Short summary of your experience (if "Yes" on above question),Do you have dietary requirements/food allergies (Please indicate in 'Other')?,Do you already have either a SRC (Target board) or RCY (HIOH) volunteer shirt?,If you don't have, please indicate your size.,Are you joining as a group?,Days of the Week,Time of the Day,What is your group's name?,Group Member's Name (max 1 person only),Any other comments/questions?
-10/05/2025 10:28:34,John,Doe,91234567,john@example.com,25,Yes,I will attend,English, Mandarin,Central,Yes,Yes,Volunteered with elderly before,None,No,S,No,Saturday, Sunday,Morning, Evening,,,`;
+10/05/2025 10:28:34,John,Doe,91234567,[john@example.com](mailto:john@example.com),25,Yes,I will attend,English, Mandarin,Central,Yes,Yes,Volunteered with elderly before,None,No,S,No,Saturday, Sunday,Morning, Evening,,,`;
     
     const blob = new Blob([template], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -405,136 +405,219 @@ if (memberName) groupMembers.push(memberName.trim());
     URL.revokeObjectURL(url);
   };
 
-  // Rest of your component remains the same...
   return (
-    <div className="modal-overlay">
-      <div className="modal csv-import-modal">
-        <div className="modal-header">
-          <h2>Import Volunteer Responses</h2>
-          <button onClick={onClose} className="close-btn">
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
+        {/* Modal Header */}
+        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+          <h2 className="text-xl font-semibold text-gray-900">Import Volunteer Responses</h2>
+          <button 
+            onClick={onClose} 
+            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+          >
             <X size={20} />
           </button>
         </div>
 
-        <div className="modal-content">
-          <div className="import-info">
-            <p>Import volunteer interest form responses from CSV. The system will:</p>
-            <ul>
-              <li>✅ Check for existing volunteers by email/phone</li>
-              <li>✅ Link existing volunteers to this project</li>
-              <li>✅ Calculate experience based on participation in other projects</li>
-              <li>✅ Use original form submission timestamp</li>
-              <li>✅ Provide detailed import summary</li>
+        {/* Modal Content */}
+        <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
+          {/* Import Info */}
+          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-sm text-blue-800 mb-3 font-medium">
+              Import volunteer interest form responses from CSV. The system will:
+            </p>
+            <ul className="text-sm text-blue-700 space-y-1">
+              <li className="flex items-center">
+                <CheckCircle size={14} className="mr-2 text-green-600 flex-shrink-0" />
+                Check for existing volunteers by email/phone
+              </li>
+              <li className="flex items-center">
+                <CheckCircle size={14} className="mr-2 text-green-600 flex-shrink-0" />
+                Link existing volunteers to this project
+              </li>
+              <li className="flex items-center">
+                <CheckCircle size={14} className="mr-2 text-green-600 flex-shrink-0" />
+                Calculate experience based on participation in other projects
+              </li>
+              <li className="flex items-center">
+                <CheckCircle size={14} className="mr-2 text-green-600 flex-shrink-0" />
+                Use original form submission timestamp
+              </li>
+              <li className="flex items-center">
+                <CheckCircle size={14} className="mr-2 text-green-600 flex-shrink-0" />
+                Provide detailed import summary
+              </li>
             </ul>
           </div>
 
-          <div className="importer-actions">
-            <button onClick={downloadTemplate} className="template-btn">
+          {/* Template Download */}
+          <div className="mb-6 flex justify-center">
+            <button 
+              onClick={downloadTemplate} 
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+            >
               <Download size={16} />
               Download Template
             </button>
           </div>
 
-          <div className="file-upload-section">
+          {/* File Upload Section */}
+          <div className="mb-6">
             <input 
               ref={fileInputRef}
               type="file" 
               accept=".csv" 
               onChange={handleFileUpload}
               disabled={isImporting}
-              style={{ display: 'none' }}
+              className="hidden"
             />
             
-            <button 
-              onClick={triggerFileInput}
-              disabled={isImporting}
-              className="file-upload-btn"
-            >
-              <Upload size={20} />
-              Choose CSV File
-            </button>
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400 transition-colors">
+              <Upload size={48} className="mx-auto mb-4 text-gray-400" />
+              <button 
+                onClick={triggerFileInput}
+                disabled={isImporting}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
+              >
+                <Upload size={20} />
+                Choose CSV File
+              </button>
+              <p className="mt-2 text-sm text-gray-500">
+                Select a CSV file containing volunteer response data
+              </p>
+            </div>
           </div>
 
+          {/* File Info */}
           {fileName && (
-            <div className="file-info">
-              <FileText size={16} />
-              <span>{fileName}</span>
+            <div className="flex items-center gap-3 mb-6 p-3 bg-gray-50 rounded-lg">
+              <FileText size={16} className="text-blue-600" />
+              <span className="text-sm font-medium text-gray-700">{fileName}</span>
             </div>
           )}
 
+          {/* Processing Indicator */}
           {isImporting && (
-            <div className="processing-indicator">
-              <div className="spinner"></div>
-              <span>Processing volunteers and preserving submission timestamps...</span>
+            <div className="flex items-center gap-3 mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="w-5 h-5 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin"></div>
+              <span className="text-sm font-medium text-blue-800">
+                Processing volunteers and preserving submission timestamps...
+              </span>
             </div>
           )}
 
+          {/* Import Results */}
           {importResult && (
-            <div className={`import-status ${importResult.success ? 'success' : 'error'}`}>
-              {importResult.success ? (
-                <CheckCircle size={16} />
-              ) : (
-                <AlertCircle size={16} />
-              )}
-              <div className="import-details">
-                <strong>{importResult.success ? 'Import Successful!' : 'Import Failed'}</strong>
-                <p>{importResult.message}</p>
-                
-                {importResult.success && (
-                  <div className="import-summary">
-                    <div className="summary-grid">
-                      <div className="summary-item">
-                        <span className="summary-label">New Volunteers:</span>
-                        <span className="summary-value">{importResult.created || 0}</span>
-                      </div>
-                      <div className="summary-item">
-                        <span className="summary-label">Updated Existing:</span>
-                        <span className="summary-value">{importResult.updated || 0}</span>
-                      </div>
-                      <div className="summary-item">
-                        <span className="summary-label">Linked to Project:</span>
-                        <span className="summary-value">{importResult.linkedToProject || 0}</span>
-                      </div>
-                      {importResult.errors > 0 && (
-                        <div className="summary-item error">
-                          <span className="summary-label">Errors:</span>
-                          <span className="summary-value">{importResult.errors}</span>
-                        </div>
-                      )}
-                    </div>
-                    <div className="experience-note">
-                      📊 Experience status calculated based on previous project participation
-                    </div>
-                    <div className="timestamp-note">
-                      ⏰ Original form submission timestamps preserved
-                    </div>
-                    {importResult.updated > 0 && (
-                      <div className="existing-note">
-                        ✅ Existing volunteers were successfully linked to this project
-                      </div>
-                    )}
-                  </div>
+            <div className={`p-4 rounded-lg border ${
+              importResult.success 
+                ? 'bg-green-50 border-green-200' 
+                : 'bg-red-50 border-red-200'
+            }`}>
+              <div className="flex items-start gap-3">
+                {importResult.success ? (
+                  <CheckCircle size={20} className="text-green-600 flex-shrink-0 mt-0.5" />
+                ) : (
+                  <AlertCircle size={20} className="text-red-600 flex-shrink-0 mt-0.5" />
                 )}
                 
-                {importResult.errorDetails && importResult.errorDetails.length > 0 && (
-                  <details className="error-details">
-                    <summary>View Error Details ({importResult.errorDetails.length})</summary>
-                    <div className="error-list">
-                      {importResult.errorDetails.map((error, idx) => (
-                        <div key={idx} className="error-detail">
-                          <strong>{error.volunteer}</strong>: {error.error}
+                <div className="flex-1">
+                  <h4 className={`font-semibold ${
+                    importResult.success ? 'text-green-800' : 'text-red-800'
+                  }`}>
+                    {importResult.success ? 'Import Successful!' : 'Import Failed'}
+                  </h4>
+                  
+                  <p className={`text-sm mt-1 ${
+                    importResult.success ? 'text-green-700' : 'text-red-700'
+                  }`}>
+                    {importResult.message}
+                  </p>
+                  
+                  {importResult.success && (
+                    <div className="mt-4 space-y-3">
+                      {/* Summary Grid */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="text-center p-3 bg-white rounded-lg border border-green-200">
+                          <div className="text-2xl font-bold text-green-600">
+                            {importResult.created || 0}
+                          </div>
+                          <div className="text-xs text-green-700 font-medium">New Volunteers</div>
                         </div>
-                      ))}
+                        
+                        <div className="text-center p-3 bg-white rounded-lg border border-green-200">
+                          <div className="text-2xl font-bold text-blue-600">
+                            {importResult.updated || 0}
+                          </div>
+                          <div className="text-xs text-blue-700 font-medium">Updated Existing</div>
+                        </div>
+                        
+                        <div className="text-center p-3 bg-white rounded-lg border border-green-200">
+                          <div className="text-2xl font-bold text-purple-600">
+                            {importResult.linkedToProject || 0}
+                          </div>
+                          <div className="text-xs text-purple-700 font-medium">Linked to Project</div>
+                        </div>
+                        
+                        {importResult.errors > 0 && (
+                          <div className="text-center p-3 bg-white rounded-lg border border-red-200">
+                            <div className="text-2xl font-bold text-red-600">
+                              {importResult.errors}
+                            </div>
+                            <div className="text-xs text-red-700 font-medium">Errors</div>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Status Notes */}
+                      <div className="space-y-2 text-xs">
+                        <div className="flex items-center gap-2 p-2 bg-blue-100 rounded text-blue-800">
+                          <span>📊</span>
+                          <span>Experience status calculated based on previous project participation</span>
+                        </div>
+                        
+                        <div className="flex items-center gap-2 p-2 bg-purple-100 rounded text-purple-800">
+                          <span>⏰</span>
+                          <span>Original form submission timestamps preserved</span>
+                        </div>
+                        
+                        {importResult.updated > 0 && (
+                          <div className="flex items-center gap-2 p-2 bg-green-100 rounded text-green-800">
+                            <span>✅</span>
+                            <span>Existing volunteers were successfully linked to this project</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </details>
-                )}
+                  )}
+                  
+                  {/* Error Details */}
+                  {importResult.errorDetails && importResult.errorDetails.length > 0 && (
+                    <details className="mt-4">
+                      <summary className="cursor-pointer font-medium text-red-800 hover:text-red-900">
+                        View Error Details ({importResult.errorDetails.length})
+                      </summary>
+                      <div className="mt-2 p-3 bg-red-100 rounded-lg max-h-48 overflow-y-auto">
+                        {importResult.errorDetails.map((error, idx) => (
+                          <div key={idx} className="py-1 border-b border-red-200 last:border-b-0">
+                            <span className="font-medium text-red-900">{error.volunteer}:</span>
+                            <span className="text-red-700 ml-1">{error.error}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+                </div>
               </div>
             </div>
           )}
         </div>
 
-        <div className="modal-actions">
-          <button onClick={onClose} className="cancel-btn">
+        {/* Modal Actions */}
+        <div className="flex justify-end px-6 py-4 border-t border-gray-200 bg-gray-50">
+          <button 
+            onClick={onClose} 
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors"
+          >
             Close
           </button>
         </div>

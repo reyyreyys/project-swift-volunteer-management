@@ -50,7 +50,7 @@ const AssignmentsTab = ({ projectId, refreshKey, onRefresh }) => {
     }
   };
 
-  // NEW: Remove assignment functionality for a group
+  // Remove assignment functionality for a group
   const removeGroupAssignment = async (groupId) => {
     const group = clientGroups.find(g => g.id === groupId);
     if (!group || !group.groupClients) return;
@@ -229,7 +229,7 @@ const AssignmentsTab = ({ projectId, refreshKey, onRefresh }) => {
     return existingGroupsCount + stagedGroupsCount;
   };
 
-  // NEW: Check if group has existing (saved) assignment
+  // Check if group has existing (saved) assignment
   const hasExistingAssignment = (groupId) => {
     const group = clientGroups.find(g => g.id === groupId);
     if (!group || !group.groupClients) return false;
@@ -253,9 +253,11 @@ const AssignmentsTab = ({ projectId, refreshKey, onRefresh }) => {
 
   if (loading) {
     return (
-      <div className="loading-state">
-        <RefreshCw className="spinner" />
-        <span>Loading assignments...</span>
+      <div className="flex items-center justify-center min-h-96 space-y-4">
+        <div className="flex items-center space-x-3 text-gray-600">
+          <RefreshCw className="animate-spin h-6 w-6" />
+          <span className="text-lg">Loading assignments...</span>
+        </div>
       </div>
     );
   }
@@ -263,213 +265,210 @@ const AssignmentsTab = ({ projectId, refreshKey, onRefresh }) => {
   const hasChanges = Object.keys(stagedAssignments).length > 0;
 
   return (
-    <div className="assignments-tab">
+    <div className="bg-gray-50 min-h-screen">
       {/* Header */}
-      <div className="assignments-header">
-        <div>
-          <h3>Volunteer Pair Assignments</h3>
-          <p>Assign volunteer pairs to client groups</p>
+      <div className="bg-white border-b border-gray-200 px-6 py-4">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div>
+            <h3 className="text-xl font-semibold text-gray-900">Volunteer Pair Assignments</h3>
+            <p className="text-sm text-gray-600 mt-1">Assign volunteer pairs to client groups</p>
+          </div>
+          
+          {hasChanges && (
+            <button
+              onClick={saveAssignments}
+              disabled={saving}
+              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+            >
+              <Save className="h-4 w-4 mr-2" />
+              <span>
+                {saving ? 'Saving...' : `Save ${Object.keys(stagedAssignments).length} Assignment${Object.keys(stagedAssignments).length !== 1 ? 's' : ''}`}
+              </span>
+            </button>
+          )}
         </div>
-        
-        {hasChanges && (
-          <button
-            onClick={saveAssignments}
-            disabled={saving}
-            className="save-assignments-btn"
-          >
-            <Save className="w-4 h-4" />
-            <span>
-              {saving ? 'Saving...' : `Save ${Object.keys(stagedAssignments).length} Assignment${Object.keys(stagedAssignments).length !== 1 ? 's' : ''}`}
-            </span>
-          </button>
-        )}
       </div>
 
-      <div className="assignments-content">
-        <div className="assignments-grid">
+      <div className="p-6 max-w-7xl mx-auto">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Client Groups - Left Side */}
-          <div className="client-groups-section">
-            <div className="client-groups-header">
-              <h4>Client Groups</h4>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+              <h4 className="text-lg font-semibold text-gray-900">Client Groups</h4>
             </div>
             
-            <div className="client-groups-content">
+            <div className="p-6 max-h-[70vh] overflow-y-auto">
               {clientGroups.length === 0 ? (
-                <div className="empty-state">
-                  <AlertCircle />
-                  <h5>No Client Groups</h5>
-                  <p>No client groups found. Please create client groups first.</p>
+                <div className="text-center py-12">
+                  <AlertCircle className="mx-auto h-12 w-12 text-gray-300 mb-4" />
+                  <h5 className="text-lg font-medium text-gray-900 mb-2">No Client Groups</h5>
+                  <p className="text-gray-600">No client groups found. Please create client groups first.</p>
                 </div>
               ) : (
-                clientGroups.map(group => {
-                  const assignment = getGroupAssignment(group.id);
-                  const isAssigned = isGroupAssigned(group.id);
-                  const hasExisting = hasExistingAssignment(group.id);
-                  const isRemoving = removing[group.id];
-                  const currentPairId = stagedAssignments[group.id] || 
-                    (assignment?.volunteerPair?.id) || '';
-                  
-                  return (
-                    <div key={group.id} className="client-group-card">
-                      <div className="client-group-header">
-                        <div className="client-group-title">
-                          <MapPin className="client-stat-icon" />
-                          <h5>{group.name}</h5>
-                          <span className="client-group-count">
-                            {group.groupClients?.length || 0} clients
-                          </span>
-                          {isAssigned && (
-                            <CheckCircle className="assigned-indicator" />
-                          )}
-                        </div>
-
-                        <div className="client-assignment-controls">
-                          {assignment && (
-                            <span className="assignment-status">
-                              {assignment.volunteerPair 
-                                ? `${assignment.volunteerPair.volunteer1?.firstName} & ${assignment.volunteerPair.volunteer2?.firstName}`
-                                : 'Loading...'
-                              }
-                            </span>
-                          )}
-                          
-                          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                            <select
-                              value={currentPairId}
-                              onChange={(e) => handleGroupAssignment(group.id, e.target.value)}
-                              className="pair-select"
-                              disabled={assignment && !stagedAssignments[group.id]}
-                            >
-                              <option value="">Select Pair...</option>
-                              {pairs.map(pair => (
-                                <option key={pair.id} value={pair.id}>
-                                  {pair.pairName || `${pair.volunteer1?.firstName} & ${pair.volunteer2?.firstName}`}
-                                  {getPairUsageCount(pair.id) > 0 && ` (${getPairUsageCount(pair.id)} groups)`}
-                                </option>
-                              ))}
-                            </select>
-
-                            {/* NEW: Remove Assignment Button */}
-                            {hasExisting && (
-                              <button
-                                onClick={() => removeGroupAssignment(group.id)}
-                                disabled={isRemoving}
-                                className="btn-icon btn-danger"
-                                title="Remove assignment for this group"
-                                style={{
-                                  minWidth: '32px',
-                                  height: '32px',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  backgroundColor: '#fee2e2',
-                                  color: '#dc2626',
-                                  border: 'none',
-                                  borderRadius: '6px',
-                                  cursor: isRemoving ? 'not-allowed' : 'pointer',
-                                  opacity: isRemoving ? 0.5 : 1
-                                }}
-                              >
-                                {isRemoving ? (
-                                  <RefreshCw className="w-4 h-4 spinner" />
-                                ) : (
-                                  <Trash2 className="w-4 h-4" />
-                                )}
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Client List */}
-                      <div className="client-list">
-                        {group.groupClients?.map(gc => (
-                          <div key={gc.id} className="client-item">
-                            <div className="client-info">
-                              <span className={`client-type-badge ${gc.type.toLowerCase()}`}>
-                                {gc.type}
+                <div className="space-y-4">
+                  {clientGroups.map(group => {
+                    const assignment = getGroupAssignment(group.id);
+                    const isAssigned = isGroupAssigned(group.id);
+                    const hasExisting = hasExistingAssignment(group.id);
+                    const isRemoving = removing[group.id];
+                    const currentPairId = stagedAssignments[group.id] || 
+                      (assignment?.volunteerPair?.id) || '';
+                    
+                    return (
+                      <div key={group.id} className="bg-gray-50 border border-gray-200 rounded-lg overflow-hidden">
+                        <div className="p-4">
+                          <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center space-x-3">
+                              <MapPin className="h-5 w-5 text-gray-500" />
+                              <h5 className="font-semibold text-gray-900">{group.name}</h5>
+                              <span className="px-2 py-1 bg-gray-200 text-gray-700 text-xs rounded-full font-medium">
+                                {group.groupClients?.length || 0} clients
                               </span>
-                              <span className="client-name">{gc.client.name}</span>
+                              {isAssigned && (
+                                <CheckCircle className="h-4 w-4 text-green-600" />
+                              )}
                             </div>
                           </div>
-                        ))}
+
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
+                            {assignment && (
+                              <span className="text-sm text-green-600 font-medium">
+                                {assignment.volunteerPair 
+                                  ? `${assignment.volunteerPair.volunteer1?.firstName} & ${assignment.volunteerPair.volunteer2?.firstName}`
+                                  : 'Loading...'
+                                }
+                              </span>
+                            )}
+                            
+                            <div className="flex items-center gap-2">
+                              <select
+                                value={currentPairId}
+                                onChange={(e) => handleGroupAssignment(group.id, e.target.value)}
+                                className="text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white text-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent min-w-0 flex-1 sm:min-w-36"
+                                disabled={assignment && !stagedAssignments[group.id]}
+                              >
+                                <option value="">Select Pair...</option>
+                                {pairs.map(pair => (
+                                  <option key={pair.id} value={pair.id}>
+                                    {pair.pairName || `${pair.volunteer1?.firstName} & ${pair.volunteer2?.firstName}`}
+                                    {getPairUsageCount(pair.id) > 0 && ` (${getPairUsageCount(pair.id)} groups)`}
+                                  </option>
+                                ))}
+                              </select>
+
+                              {/* Remove Assignment Button */}
+                              {hasExisting && (
+                                <button
+                                  onClick={() => removeGroupAssignment(group.id)}
+                                  disabled={isRemoving}
+                                  className="flex items-center justify-center w-8 h-8 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                  title="Remove assignment for this group"
+                                >
+                                  {isRemoving ? (
+                                    <RefreshCw className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="h-4 w-4" />
+                                  )}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Client List */}
+                          <div className="space-y-2">
+                            {group.groupClients?.map(gc => (
+                              <div key={gc.id} className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200">
+                                <div className="flex items-center space-x-3">
+                                  <span className={`px-2 py-1 text-xs font-semibold rounded-full uppercase tracking-wide ${
+                                    gc.type.toLowerCase() === 'mandatory' 
+                                      ? 'bg-red-100 text-red-800 border border-red-200' 
+                                      : 'bg-blue-100 text-blue-800 border border-blue-200'
+                                  }`}>
+                                    {gc.type}
+                                  </span>
+                                  <span className="font-medium text-gray-900">{gc.client.name}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })
+                    );
+                  })}
+                </div>
               )}
             </div>
           </div>
 
           {/* Volunteer Pairs - Right Side */}
-          <div className="volunteer-pairs-section">
-            <div className="volunteer-pairs-header">
-              <h4>Available Pairs</h4>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+              <h4 className="text-lg font-semibold text-gray-900 mb-3">Available Pairs</h4>
               <input
                 type="text"
                 placeholder="Search pairs..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pairs-search"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
 
-            <div className="volunteer-pairs-content">
+            <div className="p-6 max-h-[60vh] overflow-y-auto">
               {filteredPairs.length === 0 ? (
-                <div className="empty-state">
-                  <Users />
-                  <h5>No Volunteer Pairs</h5>
-                  <p>No volunteer pairs found. Please create pairs first.</p>
+                <div className="text-center py-12">
+                  <Users className="mx-auto h-12 w-12 text-gray-300 mb-4" />
+                  <h5 className="text-lg font-medium text-gray-900 mb-2">No Volunteer Pairs</h5>
+                  <p className="text-gray-600">No volunteer pairs found. Please create pairs first.</p>
                 </div>
               ) : (
-                <div className="pairs-list">
+                <div className="space-y-3">
                   {filteredPairs.map(pair => {
                     const usageCount = getPairUsageCount(pair.id);
                     
-                    // NEW: Get combined regions from both volunteers
+                    // Get combined regions from both volunteers
                     const volunteer1Regions = pair.volunteer1?.regions || [];
                     const volunteer2Regions = pair.volunteer2?.regions || [];
                     const combinedRegions = [...new Set([...volunteer1Regions, ...volunteer2Regions])];
                     
                     return (
-                      <div key={pair.id} className="pair-card">
-                        <div className="pair-card-content">
-                          <div className="pair-info">
-                            <div className="pair-name">
+                      <div key={pair.id} className="bg-gray-50 border border-gray-200 rounded-lg p-4 hover:border-gray-300 transition-colors">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="font-semibold text-gray-900 text-sm mb-1">
                               {pair.pairName || `${pair.volunteer1?.firstName} & ${pair.volunteer2?.firstName}`}
                             </div>
-                            <div className="pair-details">
+                            <div className="text-xs text-gray-600 mb-2">
                               {pair.volunteer1?.firstName} {pair.volunteer1?.lastName} & {pair.volunteer2?.firstName} {pair.volunteer2?.lastName}
                             </div>
                             
-                            {/* NEW: Display location/regions */}
+                            {/* Display location/regions */}
                             {combinedRegions.length > 0 && (
-                              <div className="pair-locations">
-                                <MapPin className="w-3 h-3" />
-                                <span className="pair-regions">
+                              <div className="flex items-center space-x-1 mb-2">
+                                <MapPin className="h-3 w-3 text-blue-600" />
+                                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-medium">
                                   {combinedRegions.join(', ')}
                                 </span>
                               </div>
                             )}
                             
                             {usageCount > 0 && (
-                              <div className="pair-usage">
+                              <div className="text-xs text-blue-600 font-medium bg-blue-50 px-2 py-1 rounded-full inline-block">
                                 {usageCount} group assignment{usageCount !== 1 ? 's' : ''}
                               </div>
                             )}
                           </div>
                           
-                          <div className="pair-meta">
-                            <div className="experience-indicators">
+                          <div className="text-right flex-shrink-0">
+                            <div className="flex items-center justify-end space-x-1 mb-2">
                               {pair.volunteer1?.hasExperience && (
-                                <span className="experience-dot" title="Experienced"></span>
+                                <span className="w-2 h-2 bg-green-500 rounded-full" title="Experienced"></span>
                               )}
                               {pair.volunteer2?.hasExperience && (
-                                <span className="experience-dot" title="Experienced"></span>
+                                <span className="w-2 h-2 bg-green-500 rounded-full" title="Experienced"></span>
                               )}
                             </div>
                             {pair.compatibility && (
-                              <div className="compatibility-score">
+                              <div className="text-xs text-gray-600 font-medium">
                                 {(pair.compatibility * 100).toFixed(0)}% match
                               </div>
                             )}
@@ -481,18 +480,19 @@ const AssignmentsTab = ({ projectId, refreshKey, onRefresh }) => {
                 </div>
               )}
             </div>
-
           </div>
         </div>
       </div>
 
       {/* Summary */}
       {hasChanges && (
-        <div className="assignment-summary">
-          <p>
-            <strong>{Object.keys(stagedAssignments).length} group assignment{Object.keys(stagedAssignments).length !== 1 ? 's' : ''}</strong> ready to save.
-            This will assign volunteer pairs to entire client groups.
-          </p>
+        <div className="mx-6 mb-6 max-w-7xl mx-auto">
+          <div className="bg-gradient-to-r from-blue-600 to-blue-800 text-white px-6 py-4 rounded-lg shadow-sm">
+            <p className="text-sm font-medium">
+              <strong>{Object.keys(stagedAssignments).length} group assignment{Object.keys(stagedAssignments).length !== 1 ? 's' : ''}</strong> ready to save.
+              This will assign volunteer pairs to entire client groups.
+            </p>
+          </div>
         </div>
       )}
     </div>

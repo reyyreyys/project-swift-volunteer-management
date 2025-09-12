@@ -14,9 +14,7 @@ function App() {
   return (
     <AuthProvider>
       <Router>
-        <div className="App">
-          <AppContent />
-        </div>
+        <AppContent />
       </Router>
     </AuthProvider>
   );
@@ -27,9 +25,9 @@ function AppContent() {
 
   if (loading) {
     return (
-      <div className="loading-screen">
-        <div className="spinner"></div>
-        <p>Loading...</p>
+      <div className="flex flex-col items-center justify-center min-h-screen gap-4 bg-gray-50">
+        <div className="w-8 h-8 border-3 border-gray-300 border-t-indigo-500 rounded-full animate-spin"></div>
+        <p className="text-gray-600">Loading...</p>
       </div>
     );
   }
@@ -39,17 +37,22 @@ function AppContent() {
   }
 
   return (
-    <div className="app-container">
+    <div className="flex min-h-screen bg-gray-50">
+      {/* Navigation Sidebar */}
       <Navigation />
-      <main className="main-content">
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/projects" element={<ProjectList />} />
-          <Route path="/projects/:id" element={<ProjectDetail />} />
-          <Route path="/volunteers" element={<VolunteerDatabase />} />
-          <Route path="/clients" element={<ClientDatabase />} />
-          <Route path="*" element={<Navigate to="/" />} />
-        </Routes>
+      
+      {/* Main Content Area with proper spacing for sidebar */}
+      <main className="flex-1 md:ml-[280px] ml-0 p-4 md:p-8 overflow-y-auto min-h-screen">
+        <div className="w-full max-w-none">
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/projects" element={<ProjectList />} />
+            <Route path="/projects/:id" element={<ProjectDetail />} />
+            <Route path="/volunteers" element={<VolunteerDatabase />} />
+            <Route path="/clients" element={<ClientDatabase />} />
+            <Route path="*" element={<Navigate to="/" />} />
+          </Routes>
+        </div>
       </main>
     </div>
   );

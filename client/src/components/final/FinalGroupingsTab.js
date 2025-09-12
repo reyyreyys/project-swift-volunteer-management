@@ -83,8 +83,18 @@ const FinalGroupingsTab = ({ projectId, refreshKey = 0 }) => {
 
   // Get region badge class
   const getRegionBadgeClass = (region) => {
-    if (!region) return 'region-badge';
-    return `region-badge ${region.toLowerCase()}`;
+    const baseClasses = "inline-flex items-center px-2 py-1 rounded text-xs font-medium";
+    if (!region) return `${baseClasses} bg-gray-100 text-gray-800`;
+    
+    const regionClasses = {
+      north: "bg-blue-100 text-blue-800",
+      south: "bg-yellow-100 text-yellow-800", 
+      east: "bg-green-100 text-green-800",
+      west: "bg-pink-100 text-pink-800",
+      central: "bg-purple-100 text-purple-800"
+    };
+    
+    return `${baseClasses} ${regionClasses[region.toLowerCase()] || 'bg-gray-100 text-gray-800'}`;
   };
 
   // Handle replacement selection
@@ -95,68 +105,67 @@ const FinalGroupingsTab = ({ projectId, refreshKey = 0 }) => {
     }));
   };
 
-// Get final assignments with replacements - FIXED to prevent duplicates
-const finalAssignments = useMemo(() => {
-  // Group assignments by client group to avoid duplicates
-  const groupedAssignments = new Map();
-  
-  assignments.forEach(assignment => {
-    const pair = pairsWithIssues.find(p => p.id === assignment.volunteerPairId);
-    if (!pair) return;
+  // Get final assignments with replacements - FIXED to prevent duplicates
+  const finalAssignments = useMemo(() => {
+    // Group assignments by client group to avoid duplicates
+    const groupedAssignments = new Map();
+    
+    assignments.forEach(assignment => {
+      const pair = pairsWithIssues.find(p => p.id === assignment.volunteerPairId);
+      if (!pair) return;
 
-    // Apply replacements
-    let finalVolunteer1 = pair.volunteer1;
-    let finalVolunteer2 = pair.volunteer2;
+      // Apply replacements
+      let finalVolunteer1 = pair.volunteer1;
+      let finalVolunteer2 = pair.volunteer2;
 
-    // Check for replacements
-    const replacement1Id = replacements[`${pair.id}-${pair.volunteer1Id}`];
-    const replacement2Id = replacements[`${pair.id}-${pair.volunteer2Id}`];
+      // Check for replacements
+      const replacement1Id = replacements[`${pair.id}-${pair.volunteer1Id}`];
+      const replacement2Id = replacements[`${pair.id}-${pair.volunteer2Id}`];
 
-    if (replacement1Id) {
-      const replacement = volunteers.find(pv => pv.id === replacement1Id);
-      if (replacement) finalVolunteer1 = replacement;
-    }
-
-    if (replacement2Id) {
-      const replacement = volunteers.find(pv => pv.id === replacement2Id);
-      if (replacement) finalVolunteer2 = replacement;
-    }
-
-    // Find the client group that contains this client
-    const clientGroup = clientGroups.find(cg => 
-      cg.groupClients?.some(gc => gc.clientId === assignment.clientId)
-    );
-
-    if (clientGroup) {
-      const groupKey = `${assignment.volunteerPairId}-${clientGroup.id}`;
-      
-      // If we haven't processed this pair-group combination yet
-      if (!groupedAssignments.has(groupKey)) {
-        // Get all clients in this group
-        const assignedClients = clientGroup.groupClients?.map(gc => {
-          const client = clients.find(c => c.client?.id === gc.clientId || c.id === gc.clientId);
-          return client?.client || client;
-        }).filter(Boolean) || [];
-
-        groupedAssignments.set(groupKey, {
-          id: groupKey, // Use a composite key as ID
-          volunteerPairId: assignment.volunteerPairId,
-          clientId: assignment.clientId, // Keep the first client ID for reference
-          pair: {
-            ...pair,
-            volunteer1: finalVolunteer1,
-            volunteer2: finalVolunteer2
-          },
-          clientGroup: clientGroup,
-          clients: assignedClients
-        });
+      if (replacement1Id) {
+        const replacement = volunteers.find(pv => pv.id === replacement1Id);
+        if (replacement) finalVolunteer1 = replacement;
       }
-    }
-  });
 
-  return Array.from(groupedAssignments.values());
-}, [assignments, pairsWithIssues, replacements, volunteers, clientGroups, clients]);
+      if (replacement2Id) {
+        const replacement = volunteers.find(pv => pv.id === replacement2Id);
+        if (replacement) finalVolunteer2 = replacement;
+      }
 
+      // Find the client group that contains this client
+      const clientGroup = clientGroups.find(cg => 
+        cg.groupClients?.some(gc => gc.clientId === assignment.clientId)
+      );
+
+      if (clientGroup) {
+        const groupKey = `${assignment.volunteerPairId}-${clientGroup.id}`;
+        
+        // If we haven't processed this pair-group combination yet
+        if (!groupedAssignments.has(groupKey)) {
+          // Get all clients in this group
+          const assignedClients = clientGroup.groupClients?.map(gc => {
+            const client = clients.find(c => c.client?.id === gc.clientId || c.id === gc.clientId);
+            return client?.client || client;
+          }).filter(Boolean) || [];
+
+          groupedAssignments.set(groupKey, {
+            id: groupKey, // Use a composite key as ID
+            volunteerPairId: assignment.volunteerPairId,
+            clientId: assignment.clientId, // Keep the first client ID for reference
+            pair: {
+              ...pair,
+              volunteer1: finalVolunteer1,
+              volunteer2: finalVolunteer2
+            },
+            clientGroup: clientGroup,
+            clients: assignedClients
+          });
+        }
+      }
+    });
+
+    return Array.from(groupedAssignments.values());
+  }, [assignments, pairsWithIssues, replacements, volunteers, clientGroups, clients]);
 
   // Handle project finalisation
   const handleFinaliseProject = async () => {
@@ -186,94 +195,118 @@ const finalAssignments = useMemo(() => {
 
   if (loading) {
     return (
-      <div className="loading-container">
-        <div className="spinner"></div>
-        <p>Loading final groupings...</p>
+      <div className="flex items-center justify-center min-h-96">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <p className="text-gray-600">Loading final groupings...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="final-groupings-tab">
-      <div className="groupings-header">
-        <div>
-          <h3>Final Project Assignments</h3>
-          <p>Review pair attendance and make replacements, then finalise project assignments.</p>
+    <div className="p-6 space-y-8 bg-gray-50 min-h-screen">
+      {/* Header */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+          <div>
+            <h3 className="text-xl font-semibold text-gray-900">Final Project Assignments</h3>
+            <p className="text-sm text-gray-600 mt-1">
+              Review pair attendance and make replacements, then finalise project assignments.
+            </p>
+          </div>
+          {finalAssignments.length > 0 && (
+            <button 
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+              onClick={() => setShowFinaliseModal(true)}
+            >
+              <Target className="w-4 h-4 mr-2" />
+              Finalise Project
+            </button>
+          )}
         </div>
-        {finalAssignments.length > 0 && (
-          <button 
-            className="btn btn-success"
-            onClick={() => setShowFinaliseModal(true)}
-          >
-            <Target size={16} />
-            Finalise Project
-          </button>
-        )}
       </div>
 
       {/* Attendance & Replacement Section */}
-      <div className="attendance-section">
-        <h4>Training Attendance & Replacements</h4>
-        <p className="section-description">
-          Pairs with absent members are highlighted. Select replacements from the{' '}
-          <strong>{availableReplacements.length}</strong> available waitlisted volunteers who attended training.
-        </p>
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="p-6 border-b border-gray-200">
+          <h4 className="text-lg font-semibold text-gray-900 mb-2">Training Attendance & Replacements</h4>
+          <p className="text-sm text-gray-600">
+            Pairs with absent members are highlighted. Select replacements from the{' '}
+            <strong className="text-gray-900">{availableReplacements.length}</strong> available waitlisted volunteers who attended training.
+          </p>
+        </div>
 
         {pairsWithIssues.length === 0 ? (
-          <div className="empty-state">
-            <Users size={48} />
-            <h3>No Volunteer Pairs</h3>
-            <p>Create volunteer pairs first to see attendance status.</p>
+          <div className="p-12 text-center">
+            <Users className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No Volunteer Pairs</h3>
+            <p className="text-gray-600">Create volunteer pairs first to see attendance status.</p>
           </div>
         ) : (
-          <div className="attendance-table-container">
-            <table className="attendance-table">
-              <thead>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
                 <tr>
-                  <th>Pair Name</th>
-                  <th>Volunteer 1</th>
-                  <th>Status</th>
-                  <th>Region</th>
-                  <th>Age</th>
-                  <th>Replacement</th>
-                  <th>Volunteer 2</th>
-                  <th>Status</th>
-                  <th>Region</th>
-                  <th>Age</th>
-                  <th>Replacement</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pair Name</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Volunteer 1</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Region</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Age</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Replacement</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Volunteer 2</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Region</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Age</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Replacement</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="bg-white divide-y divide-gray-200">
                 {pairsWithIssues.map(pair => (
-                  <tr key={pair.id} className={pair.hasAbsence ? 'needs-attention' : ''}>
-                    <td>
+                  <tr 
+                    key={pair.id} 
+                    className={`${pair.hasAbsence ? 'bg-red-50 border-l-4 border-red-400' : 'hover:bg-gray-50'} transition-colors duration-150`}
+                  >
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                       {pair.name || `${pair.volunteer1?.volunteer?.firstName || 'Unknown'} & ${pair.volunteer2?.volunteer?.firstName || 'Unknown'}`}
                     </td>
                     
                     {/* Volunteer 1 */}
-                    <td>
-                      {pair.volunteer1Present ? (
-                        <CheckCircle size={16} className="text-success" />
-                      ) : (
-                        <AlertTriangle size={16} className="text-warning" />
-                      )}
-                      {pair.volunteer1?.volunteer?.firstName} {pair.volunteer1?.volunteer?.lastName}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center space-x-2">
+                        {pair.volunteer1Present ? (
+                          <CheckCircle className="w-4 h-4 text-green-500" />
+                        ) : (
+                          <AlertTriangle className="w-4 h-4 text-yellow-500" />
+                        )}
+                        <span className="text-sm text-gray-900">
+                          {pair.volunteer1?.volunteer?.firstName} {pair.volunteer1?.volunteer?.lastName}
+                        </span>
+                      </div>
                     </td>
-                    <td className={pair.volunteer1Present ? 'status-present' : 'status-absent'}>
-                      {pair.volunteer1Present ? 'Present' : 'Absent'}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                        pair.volunteer1Present 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {pair.volunteer1Present ? 'Present' : 'Absent'}
+                      </span>
                     </td>
-                    <td>
+                    <td className="px-6 py-4 whitespace-nowrap">
                       <span className={getRegionBadgeClass(pair.volunteer1?.volunteer?.regions?.[0])}>
                         {pair.volunteer1?.volunteer?.regions?.[0] || 'N/A'}
                       </span>
                     </td>
-                    <td>{pair.volunteer1?.volunteer?.age || 'N/A'}</td>
-                    <td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {pair.volunteer1?.volunteer?.age || 'N/A'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
                       {!pair.volunteer1Present ? (
                         <select 
                           value={replacements[`${pair.id}-${pair.volunteer1Id}`] || ''} 
                           onChange={(e) => handleReplacementSelect(pair.id, pair.volunteer1Id, e.target.value)}
-                          className="replacement-select"
+                          className="block w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                         >
                           <option value="">Select replacement</option>
                           {availableReplacements.map(replacement => (
@@ -283,34 +316,46 @@ const finalAssignments = useMemo(() => {
                           ))}
                         </select>
                       ) : (
-                        <span className="text-muted">No replacement needed</span>
+                        <span className="text-sm text-gray-500">No replacement needed</span>
                       )}
                     </td>
 
                     {/* Volunteer 2 */}
-                    <td>
-                      {pair.volunteer2Present ? (
-                        <CheckCircle size={16} className="text-success" />
-                      ) : (
-                        <AlertTriangle size={16} className="text-warning" />
-                      )}
-                      {pair.volunteer2?.volunteer?.firstName} {pair.volunteer2?.volunteer?.lastName}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center space-x-2">
+                        {pair.volunteer2Present ? (
+                          <CheckCircle className="w-4 h-4 text-green-500" />
+                        ) : (
+                          <AlertTriangle className="w-4 h-4 text-yellow-500" />
+                        )}
+                        <span className="text-sm text-gray-900">
+                          {pair.volunteer2?.volunteer?.firstName} {pair.volunteer2?.volunteer?.lastName}
+                        </span>
+                      </div>
                     </td>
-                    <td className={pair.volunteer2Present ? 'status-present' : 'status-absent'}>
-                      {pair.volunteer2Present ? 'Present' : 'Absent'}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                        pair.volunteer2Present 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {pair.volunteer2Present ? 'Present' : 'Absent'}
+                      </span>
                     </td>
-                    <td>
+                    <td className="px-6 py-4 whitespace-nowrap">
                       <span className={getRegionBadgeClass(pair.volunteer2?.volunteer?.regions?.[0])}>
                         {pair.volunteer2?.volunteer?.regions?.[0] || 'N/A'}
                       </span>
                     </td>
-                    <td>{pair.volunteer2?.volunteer?.age || 'N/A'}</td>
-                    <td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {pair.volunteer2?.volunteer?.age || 'N/A'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
                       {!pair.volunteer2Present ? (
                         <select 
                           value={replacements[`${pair.id}-${pair.volunteer2Id}`] || ''} 
                           onChange={(e) => handleReplacementSelect(pair.id, pair.volunteer2Id, e.target.value)}
-                          className="replacement-select"
+                          className="block w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                         >
                           <option value="">Select replacement</option>
                           {availableReplacements.map(replacement => (
@@ -320,7 +365,7 @@ const finalAssignments = useMemo(() => {
                           ))}
                         </select>
                       ) : (
-                        <span className="text-muted">No replacement needed</span>
+                        <span className="text-sm text-gray-500">No replacement needed</span>
                       )}
                     </td>
                   </tr>
@@ -332,100 +377,102 @@ const finalAssignments = useMemo(() => {
       </div>
 
       {/* Final Assignments Section */}
-      <div className="final-assignments-section">
-        <h4>Final Assignments</h4>
-        <p className="section-description">
-          Final volunteer pairs and their assigned client groups. Review before finalising the project.
-        </p>
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="p-6 border-b border-gray-200">
+          <h4 className="text-lg font-semibold text-gray-900 mb-2">Final Assignments</h4>
+          <p className="text-sm text-gray-600">
+            Final volunteer pairs and their assigned client groups. Review before finalising the project.
+          </p>
+        </div>
 
         {finalAssignments.length === 0 ? (
-          <div className="empty-state">
-            <Target size={48} />
-            <h3>No Final Assignments</h3>
-            <p>Create assignments between volunteer pairs and client groups first.</p>
+          <div className="p-12 text-center">
+            <Target className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No Final Assignments</h3>
+            <p className="text-gray-600">Create assignments between volunteer pairs and client groups first.</p>
           </div>
         ) : (
-          <div className="assignments-table-container">
-            <table className="assignments-table">
-              <thead>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
                 <tr>
-                  <th>Volunteer Pair</th>
-                  <th>Contact Details</th>
-                  <th>Area</th>
-                  <th>Assigned Clients</th>
-                  <th>Client Details</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Volunteer Pair</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact Details</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Area</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assigned Clients</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Client Details</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="bg-white divide-y divide-gray-200">
                 {finalAssignments.map((assignment, index) => (
-                  <tr key={assignment.id || index}>
-                    <td>
-                      <div className="volunteer-pair-info">
-                        <strong>
+                  <tr key={assignment.id || index} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="space-y-1">
+                        <div className="font-medium text-gray-900">
                           {assignment.pair.volunteer1?.volunteer?.firstName || assignment.pair.volunteer1?.firstName || 'Unknown'} {assignment.pair.volunteer1?.volunteer?.lastName || assignment.pair.volunteer1?.lastName || ''}
-                          <br />
+                        </div>
+                        <div className="font-medium text-gray-900">
                           {assignment.pair.volunteer2?.volunteer?.firstName || assignment.pair.volunteer2?.firstName || 'Unknown'} {assignment.pair.volunteer2?.volunteer?.lastName || assignment.pair.volunteer2?.lastName || ''}
-                        </strong>
-                      </div>
-                    </td>
-                    <td>
-                      <div className="contact-details">
-                        <div className="contact-item">
-                          <Phone size={14} />
-                          {assignment.pair.volunteer1?.volunteer?.contactNumber || assignment.pair.volunteer1?.contactNumber || 'N/A'}
-                        </div>
-                        <div className="contact-item">
-                          <Globe size={14} />
-                          {assignment.pair.volunteer1?.volunteer?.email || assignment.pair.volunteer1?.email || 'N/A'}
-                        </div>
-                        <hr />
-                        <div className="contact-item">
-                          <Phone size={14} />
-                          {assignment.pair.volunteer2?.volunteer?.contactNumber || assignment.pair.volunteer2?.contactNumber || 'N/A'}
-                        </div>
-                        <div className="contact-item">
-                          <Globe size={14} />
-                          {assignment.pair.volunteer2?.volunteer?.email || assignment.pair.volunteer2?.email || 'N/A'}
                         </div>
                       </div>
                     </td>
-                    <td>
-                      <div className="area-info">
-                        <MapPin size={14} />
+                    <td className="px-6 py-4">
+                      <div className="space-y-2 text-sm">
+                        <div className="flex items-center space-x-2">
+                          <Phone className="w-3 h-3 text-gray-400" />
+                          <span>{assignment.pair.volunteer1?.volunteer?.contactNumber || assignment.pair.volunteer1?.contactNumber || 'N/A'}</span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Globe className="w-3 h-3 text-gray-400" />
+                          <span className="truncate">{assignment.pair.volunteer1?.volunteer?.email || assignment.pair.volunteer1?.email || 'N/A'}</span>
+                        </div>
+                        <div className="border-t border-gray-200 pt-2">
+                          <div className="flex items-center space-x-2">
+                            <Phone className="w-3 h-3 text-gray-400" />
+                            <span>{assignment.pair.volunteer2?.volunteer?.contactNumber || assignment.pair.volunteer2?.contactNumber || 'N/A'}</span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Globe className="w-3 h-3 text-gray-400" />
+                            <span className="truncate">{assignment.pair.volunteer2?.volunteer?.email || assignment.pair.volunteer2?.email || 'N/A'}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center space-x-2">
+                        <MapPin className="w-4 h-4 text-gray-400" />
                         <span className={getRegionBadgeClass(assignment.pair.volunteer1?.volunteer?.regions?.[0])}>
                           {assignment.pair.volunteer1?.volunteer?.regions?.[0] || assignment.pair.volunteer1?.regions?.[0] || 'N/A'}
                         </span>
                       </div>
                     </td>
-                    <td>
-                      <div className="client-group-info">
-                        <strong>{assignment.clientGroup?.name || 'Unnamed Group'}</strong>
-                        <br />
-                        <span className="client-count">({assignment.clients?.length || 0} clients)</span>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div>
+                        <div className="font-medium text-gray-900">{assignment.clientGroup?.name || 'Unnamed Group'}</div>
+                        <div className="text-sm text-gray-500">({assignment.clients?.length || 0} clients)</div>
                       </div>
                     </td>
-                    <td>
-                    <div className="client-details">
+                    <td className="px-6 py-4">
+                      <div className="space-y-3">
                         {assignment.clients?.map((client, clientIndex) => (
-                        <div key={client?.id || clientIndex} className="client-item">
-                            <div className="client-basic">
-                            <strong>#{client?.srcId || client?.id} {client?.name}</strong>
+                          <div key={client?.id || clientIndex} className="bg-gray-50 rounded-lg p-3 border">
+                            <div className="font-medium text-gray-900 mb-2">
+                              #{client?.srcId || client?.id} {client?.name}
                             </div>
-                            <div className="client-meta">
-                            <div className="client-address">
-                                <MapPin size={12} />
+                            <div className="space-y-1 text-sm">
+                              <div className="flex items-center space-x-2 text-gray-600">
+                                <MapPin className="w-3 h-3" />
                                 <span>{client?.address || 'No address provided'}</span>
-                            </div>
-                            <div className="client-languages">
-                                <Globe size={12} />
+                              </div>
+                              <div className="flex items-center space-x-2 text-gray-600">
+                                <Globe className="w-3 h-3" />
                                 <span>{client?.languages || 'No languages specified'}</span>
+                              </div>
                             </div>
-                            </div>
-                        </div>
-                        )) || <span className="text-muted">No clients assigned</span>}
-                    </div>
+                          </div>
+                        )) || <span className="text-gray-500 text-sm">No clients assigned</span>}
+                      </div>
                     </td>
-
                   </tr>
                 ))}
               </tbody>
@@ -436,65 +483,69 @@ const finalAssignments = useMemo(() => {
 
       {/* Finalisation Modal */}
       {showFinaliseModal && (
-        <div className="modal-overlay">
-          <div className="modal confirm-modal">
-            <div className="modal-header">
-              <h2>Finalise Project</h2>
-              <button 
-                className="close-btn" 
-                onClick={() => setShowFinaliseModal(false)}
-                disabled={finalising}
-              >
-                ×
-              </button>
-            </div>
+        <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
             
-            <div className="modal-content">
-              <div className="warning-icon">
-                <AlertTriangle size={48} color="#f59e0b" />
+            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+            
+            <div className="relative inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+              <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div className="sm:flex sm:items-start">
+                  <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+                    <AlertTriangle className="h-6 w-6 text-red-600" />
+                  </div>
+                  <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                    <h3 className="text-lg leading-6 font-medium text-gray-900" id="modal-title">
+                      Finalise Project
+                    </h3>
+                    <div className="mt-2">
+                      <p className="text-sm text-gray-500 mb-4">
+                        Are you sure you want to finalise this project? This action will:
+                      </p>
+                      
+                      <ul className="text-sm text-gray-700 space-y-1 mb-4">
+                        <li>• Lock in all current volunteer pair assignments</li>
+                        <li>• Apply any selected replacements for absent volunteers</li>
+                        <li>• Remove unselected and absent volunteers from the project</li>
+                        <li>• Cannot be undone</li>
+                      </ul>
+                      
+                      <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
+                        <p className="text-sm text-yellow-800">
+                          <strong>Summary:</strong> {finalAssignments.length} final assignments will be locked in, and volunteers not in these assignments will be removed from the project.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
-              
-              <p>
-                Are you sure you want to finalise this project? This action will:
-              </p>
-              
-              <ul>
-                <li>Lock in all current volunteer pair assignments</li>
-                <li>Apply any selected replacements for absent volunteers</li>
-                <li>Remove unselected and absent volunteers from the project</li>
-                <li>Cannot be undone</li>
-              </ul>
-              
-              <div className="warning-note">
-                <p>
-                  <strong>Summary:</strong> {finalAssignments.length} final assignments will be locked in, and volunteers not in these assignments will be removed from the project.
-                </p>
-              </div>
-              
-              <div className="modal-actions">
+              <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
                 <button 
-                  className="cancel-btn" 
-                  onClick={() => setShowFinaliseModal(false)}
-                  disabled={finalising}
-                >
-                  Cancel
-                </button>
-                <button 
-                  className="confirm-btn danger" 
+                  type="button"
+                  className="w-full inline-flex justify-center items-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
                   onClick={handleFinaliseProject}
                   disabled={finalising}
                 >
                   {finalising ? (
                     <>
-                      <div className="spinner-small"></div>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                       Finalising...
                     </>
                   ) : (
                     <>
-                      <Target size={16} />
+                      <Target className="w-4 h-4 mr-2" />
                       Finalise Project
                     </>
                   )}
+                </button>
+                <button 
+                  type="button"
+                  className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                  onClick={() => setShowFinaliseModal(false)}
+                  disabled={finalising}
+                >
+                  Cancel
                 </button>
               </div>
             </div>

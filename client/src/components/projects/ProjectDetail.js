@@ -21,7 +21,7 @@ import VolunteerPairingTab from '../volunteers/VolunteerPairingTab';
 import TrainingDayTab from '../volunteers/TrainingDayTab';
 import ClientManagementTab from '../clients/ClientManagementTab';
 import AssignmentsTab from '../assignments/AssignmentsTab';
-import FinalGroupingsTab from '../final/FinalGroupingsTab'; // Add this import
+import FinalGroupingsTab from '../final/FinalGroupingsTab';
 
 // Add the PairsOverviewTable component
 const PairsOverviewTable = ({ volunteers, pairs }) => {
@@ -152,41 +152,45 @@ const PairsOverviewTable = ({ volunteers, pairs }) => {
     return (
       <tr 
         key={`${volunteerId}-${index}`}
-        className={`${pairInfo ? 'has-pair' : ''} ${isGroup ? 'is-group' : ''} ${isPaired ? 'is-paired' : ''}`}
+        className={`border-b border-gray-100 hover:bg-gray-50 ${pairInfo ? 'bg-blue-50' : ''} ${isGroup ? 'bg-yellow-50' : ''} ${isPaired ? 'border-l-4 border-l-blue-500' : ''}`}
       >
-        <td className="name-cell">
-          <div className="volunteer-name">
-            <span className="volunteer-type-icon">
+        <td className="px-4 py-3 min-w-[150px]">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">
               {isGroup ? '👥' : '👤'}
             </span>
-            {volunteer.firstName && volunteer.lastName 
-              ? `${volunteer.firstName} ${volunteer.lastName}`
-              : volunteer.name || volunteer.firstName || volunteer.fullName || 'Unknown'}
-            {(volunteer.hasExperience || volunteer.experience) && <span className="experience-star">⭐</span>}
-            {isGroup && (volunteer.groupName || volunteer.group) && (
-              <span className="group-indicator"> (Group: {volunteer.groupName || volunteer.group})</span>
-            )}
+            <div>
+              <div className="font-medium text-gray-900">
+                {volunteer.firstName && volunteer.lastName 
+                  ? `${volunteer.firstName} ${volunteer.lastName}`
+                  : volunteer.name || volunteer.firstName || volunteer.fullName || 'Unknown'}
+                {(volunteer.hasExperience || volunteer.experience) && <span className="ml-1 text-yellow-500">⭐</span>}
+              </div>
+              {isGroup && (volunteer.groupName || volunteer.group) && (
+                <div className="text-xs text-blue-600">(Group: {volunteer.groupName || volunteer.group})</div>
+              )}
+            </div>
           </div>
         </td>
-        <td>{volunteer.contact || volunteer.phone || volunteer.phoneNumber || 'N/A'}</td>
-        <td className="email-cell">{volunteer.email || 'N/A'}</td>
-        <td className="shirt-size-cell">
-          <span className="shirt-size-badge">
+        <td className="px-4 py-3 text-sm text-gray-600">{volunteer.contact || volunteer.phone || volunteer.phoneNumber || 'N/A'}</td>
+        <td className="px-4 py-3 text-sm text-gray-600 max-w-[150px] truncate">{volunteer.email || 'N/A'}</td>
+        <td className="px-4 py-3">
+          <span className="inline-flex items-center px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded-full">
             {volunteer.shirtSize || volunteer.tshirtSize || 'N/A'}
           </span>
         </td>
-        <td className="pairing-cell">
+        <td className="px-4 py-3">
           {pairInfo ? (
-            <div className="pair-info">
-              <div className="partner-name">With: {pairInfo.partnerName}</div>
-              <div className="pair-name">{pairInfo.pairName}</div>
+            <div className="text-sm">
+              <div className="font-medium text-gray-900">With: {pairInfo.partnerName}</div>
+              <div className="text-gray-500">{pairInfo.pairName}</div>
             </div>
           ) : (
-            <span className="no-pair">No pairing</span>
+            <span className="text-sm text-gray-400">No pairing</span>
           )}
         </td>
-        <td>
-          <span className="status-badge status-selected">
+        <td className="px-4 py-3">
+          <span className="inline-flex items-center px-2 py-1 text-xs font-semibold bg-green-100 text-green-800 rounded-full uppercase">
             {projectVolunteer.status || 'SELECTED'}
           </span>
         </td>
@@ -195,27 +199,29 @@ const PairsOverviewTable = ({ volunteers, pairs }) => {
   };
 
    return (
-    <div className="pairs-overview-container">
+    <div className="w-full">
       {/* Paired Volunteers Section */}
       {pairedVolunteers.length > 0 && (
-        <div className="pairs-section">
-          <div className="pairs-section-header">
-            <Link2 />
-            <span>Paired Volunteers ({pairedVolunteers.length} pairs)</span>
+        <div className="mb-8 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <div className="px-6 py-4 bg-blue-50 border-b border-gray-200">
+            <div className="flex items-center gap-3">
+              <Link2 className="text-blue-600" />
+              <span className="font-semibold text-gray-900">Paired Volunteers ({pairedVolunteers.length} pairs)</span>
+            </div>
+            <div className="mt-1 text-sm text-gray-600">
+              Volunteers who have been paired together for the project.
+            </div>
           </div>
-          <div className="section-description">
-            Volunteers who have been paired together for the project.
-          </div>
-          <div className="pairs-section-content">
-            <table className="pairs-table">
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse min-w-[1000px]">
               <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Contact</th>
-                  <th>Email</th>
-                  <th>Shirt Size</th>
-                  <th>Pairing</th>
-                  <th>Status</th>
+                <tr className="bg-gray-50">
+                  <th className="px-4 py-3 text-left font-semibold text-gray-700 border-b-2 border-gray-200">Name</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-700 border-b-2 border-gray-200">Contact</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-700 border-b-2 border-gray-200">Email</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-700 border-b-2 border-gray-200">Shirt Size</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-700 border-b-2 border-gray-200">Pairing</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-700 border-b-2 border-gray-200">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -227,14 +233,13 @@ const PairsOverviewTable = ({ volunteers, pairs }) => {
                         projectVolunteer, 
                         `${pairIndex}-${volIndex}`, 
                         true, 
-                        pairInfo,
-                        'paired-volunteer'
+                        pairInfo
                       );
                     })}
                     {/* Add separator between pairs */}
                     {pairIndex < pairedVolunteers.length - 1 && (
-                      <tr className="pair-separator">
-                        <td colSpan="6"></td>
+                      <tr className="border-b-2 border-blue-200">
+                        <td colSpan="6" className="h-1"></td>
                       </tr>
                     )}
                   </React.Fragment>
@@ -247,24 +252,26 @@ const PairsOverviewTable = ({ volunteers, pairs }) => {
 
       {/* Single Volunteers Section */}
       {singleVolunteers.length > 0 && (
-        <div className="pairs-section">
-          <div className="pairs-section-header">
-            <Users />
-            <span>Individual Volunteers ({singleVolunteers.length})</span>
+        <div className="mb-8 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+            <div className="flex items-center gap-3">
+              <Users className="text-gray-600" />
+              <span className="font-semibold text-gray-900">Individual Volunteers ({singleVolunteers.length})</span>
+            </div>
+            <div className="mt-1 text-sm text-gray-600">
+              Selected volunteers who are not currently paired.
+            </div>
           </div>
-          <div className="section-description">
-            Selected volunteers who are not currently paired.
-          </div>
-          <div className="pairs-section-content">
-            <table className="pairs-table">
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse min-w-[1000px]">
               <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Contact</th>
-                  <th>Email</th>
-                  <th>Shirt Size</th>
-                  <th>Pairing</th>
-                  <th>Status</th>
+                <tr className="bg-gray-50">
+                  <th className="px-4 py-3 text-left font-semibold text-gray-700 border-b-2 border-gray-200">Name</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-700 border-b-2 border-gray-200">Contact</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-700 border-b-2 border-gray-200">Email</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-700 border-b-2 border-gray-200">Shirt Size</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-700 border-b-2 border-gray-200">Pairing</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-700 border-b-2 border-gray-200">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -273,8 +280,7 @@ const PairsOverviewTable = ({ volunteers, pairs }) => {
                     projectVolunteer, 
                     `single-${index}`, 
                     false, 
-                    null,
-                    'single-volunteer'
+                    null
                   )
                 )}
               </tbody>
@@ -285,12 +291,12 @@ const PairsOverviewTable = ({ volunteers, pairs }) => {
 
       {/* Empty State */}
       {pairedVolunteers.length === 0 && singleVolunteers.length === 0 && (
-        <div className="pairs-section">
-          <div className="pairs-section-header">
-            <AlertTriangle />
-            <span>No Selected Volunteers</span>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
+          <div className="flex items-center justify-center gap-3 mb-4">
+            <AlertTriangle className="text-amber-500" />
+            <span className="font-semibold text-gray-900 text-lg">No Selected Volunteers</span>
           </div>
-          <div className="section-description">
+          <div className="text-gray-600">
             No volunteers have been selected for this project yet.
           </div>
         </div>
@@ -330,27 +336,24 @@ const ProjectDetail = () => {
     }
   };
 
-  // FIXED: Updated loadProjectData to use consistent API endpoints
   const loadProjectData = async () => {
     try {
       const [volunteersRes, clientsRes, pairsRes, groupsRes, assignmentsRes] = await Promise.all([
         axios.get(`/projects/${id}/volunteers-detailed`),
         axios.get(`/projects/${id}/clients`),
-        axios.get(`/projects/${id}/pairs`), // Fixed: Use consistent endpoint
+        axios.get(`/projects/${id}/pairs`),
         axios.get(`/projects/${id}/client-groups`),
         axios.get(`/projects/${id}/assignments`)
       ]);
 
-      console.log('Pairs API Response:', pairsRes.data); // Debug log
 
       setProjectVolunteers(volunteersRes.data || []);
       setProjectClients(clientsRes.data || []);
-      setVolunteerPairs(pairsRes.data || []); // This should now update properly
+      setVolunteerPairs(pairsRes.data || []);
       setClientGroups(groupsRes.data || []);
       setAssignments(assignmentsRes.data || []);
     } catch (error) {
       console.error('Error loading project data:', error);
-      // Set defaults only on error
       setProjectVolunteers([]);
       setProjectClients([]);
       setVolunteerPairs([]);
@@ -360,11 +363,10 @@ const ProjectDetail = () => {
   };
 
   const handleImportComplete = (result) => {
-    console.log('Import completed:', result);
     setShowVolunteerImporter(false);
-    // Force full page refresh
     window.location.reload();
   };
+
   const handleImportVolunteers = () => {
     setShowVolunteerImporter(true);
     setActiveTab('volunteers');
@@ -396,25 +398,25 @@ const ProjectDetail = () => {
 
   if (loading) {
     return (
-      <div className="loading-screen">
-        <div className="spinner"></div>
-        <p>Loading project...</p>
+      <div className="flex flex-col items-center justify-center min-h-screen gap-4">
+        <div className="w-8 h-8 border-3 border-gray-300 border-t-indigo-500 rounded-full animate-spin"></div>
+        <p className="text-gray-600">Loading project...</p>
       </div>
     );
   }
 
   if (!project) {
     return (
-      <div className="project-detail">
-        <p>Project not found</p>
-        <Link to="/projects" className="back-link">
+      <div className="p-8">
+        <p className="text-gray-600 mb-4">Project not found</p>
+        <Link to="/projects" className="inline-flex items-center gap-2 text-indigo-600 hover:text-indigo-500">
           <ArrowLeft size={16} /> Back to Projects
         </Link>
       </div>
     );
   }
 
-  // Calculate stats with improved status checking
+  // Calculate stats
   const selectedVolunteers = projectVolunteers.filter(v => 
     v.status && (v.status.toLowerCase() === 'selected' || v.status.toUpperCase() === 'SELECTED')
   ).length;
@@ -436,194 +438,179 @@ const ProjectDetail = () => {
     switch (activeTab) {
       case 'overview':
         return (
-          <div className="overview-tab">
+          <div className="space-y-8">
             {/* Overview Stats */}
-            <div className="overview-stats">
-              <div className="stat-card">
-                <h3>Volunteers</h3>
-                <div className="stat-number">{projectVolunteers.length}</div>
-                <div className="stat-subtitle">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Volunteers</h3>
+                <div className="text-3xl font-bold text-gray-800 mb-1">{projectVolunteers.length}</div>
+                <div className="text-sm text-gray-600">
                   {selectedVolunteers} selected, {waitlistedVolunteers} waitlisted
                 </div>
               </div>
-              <div className="stat-card">
-                <h3>Training Status</h3>
-                <div className="stat-number">{needTrainingCount}</div>
-                <div className="stat-subtitle">
+              <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Training Status</h3>
+                <div className="text-3xl font-bold text-gray-800 mb-1">{needTrainingCount}</div>
+                <div className="text-sm text-gray-600">
                   {experiencedVolunteers} have experience
                 </div>
               </div>
-              <div className="stat-card">
-                <h3>Clients</h3>
-                <div className="stat-number">{projectClients.length}</div>
-                <div className="stat-subtitle">
+              <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Clients</h3>
+                <div className="text-3xl font-bold text-gray-800 mb-1">{projectClients.length}</div>
+                <div className="text-sm text-gray-600">
                   {clientGroups.length} groups created
                 </div>
               </div>
             </div>
 
-            <div className="overview-stats">
-              <div className="stat-card">
-                <h3>Assignments</h3>
-                <div className="stat-number">{assignments.length}</div>
-                <div className="stat-subtitle">
+            <div className="grid grid-cols-1 md:grid-cols-1 gap-6">
+              <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Assignments</h3>
+                <div className="text-3xl font-bold text-gray-800 mb-1">{assignments.length}</div>
+                <div className="text-sm text-gray-600">
                   {volunteerPairs.length} pairs available
                 </div>
               </div>
             </div>
 
-            {/* Add the pairs overview table - show regardless of selected count for debugging */}
+            {/* Pairs Overview Table */}
             <PairsOverviewTable 
               volunteers={projectVolunteers} 
               pairs={volunteerPairs} 
             />
 
             {/* Quick Actions */}
-            <div className="quick-actions-section">
-              <h3>Quick Actions</h3>
-              <div className="action-grid">
-                <Link 
-                  to="#" 
-                  className="action-card"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setActiveTab('volunteers');
-                  }}
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900 mb-6">Quick Actions</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <button 
+                  className="flex flex-col items-center p-6 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors text-center"
+                  onClick={() => setActiveTab('volunteers')}
                 >
-                  <Users size={48} />
-                  Manage Volunteers
-                </Link>
+                  <Users size={48} className="text-indigo-600 mb-3" />
+                  <span className="font-medium text-gray-900">Manage Volunteers</span>
+                </button>
                 
-                <Link 
-                  to="#" 
-                  className={`action-card ${selectedVolunteers === 0 ? 'disabled' : ''}`}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    if (selectedVolunteers > 0) {
-                      setActiveTab('pairing');
-                    }
-                  }}
+                <button 
+                  className={`flex flex-col items-center p-6 rounded-lg transition-colors text-center ${
+                    selectedVolunteers === 0 
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                      : 'bg-gray-50 hover:bg-gray-100 text-gray-900'
+                  }`}
+                  onClick={() => selectedVolunteers > 0 && setActiveTab('pairing')}
+                  disabled={selectedVolunteers === 0}
                 >
-                  <Link2 size={48} />
-                  Create Pairs
-                </Link>
+                  <Link2 size={48} className={selectedVolunteers === 0 ? 'text-gray-400' : 'text-indigo-600'} />
+                  <span className="font-medium mt-3">Create Pairs</span>
+                </button>
                 
-                <Link 
-                  to="#" 
-                  className={`action-card ${selectedVolunteers === 0 ? 'disabled' : ''}`}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    if (selectedVolunteers > 0) {
-                      setActiveTab('training');
-                    }
-                  }}
+                <button 
+                  className={`flex flex-col items-center p-6 rounded-lg transition-colors text-center ${
+                    selectedVolunteers === 0 
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                      : 'bg-gray-50 hover:bg-gray-100 text-gray-900'
+                  }`}
+                  onClick={() => selectedVolunteers > 0 && setActiveTab('training')}
+                  disabled={selectedVolunteers === 0}
                 >
-                  <BookOpen size={48} />
-                  Training Day
-                </Link>
+                  <BookOpen size={48} className={selectedVolunteers === 0 ? 'text-gray-400' : 'text-indigo-600'} />
+                  <span className="font-medium mt-3">Training Day</span>
+                </button>
                 
-                <Link 
-                  to="#" 
-                  className="action-card"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setActiveTab('clients');
-                  }}
+                <button 
+                  className="flex flex-col items-center p-6 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors text-center"
+                  onClick={() => setActiveTab('clients')}
                 >
-                  <UserCheck size={48} />
-                  Manage Clients
-                </Link>
+                  <UserCheck size={48} className="text-indigo-600 mb-3" />
+                  <span className="font-medium text-gray-900">Manage Clients</span>
+                </button>
                 
-                <Link 
-                  to="#" 
-                  className={`action-card ${(volunteerPairs.length === 0 || clientGroups.length === 0) ? 'disabled' : ''}`}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    if (volunteerPairs.length > 0 && clientGroups.length > 0) {
-                      setActiveTab('assignments');
-                    }
-                  }}
+                <button 
+                  className={`flex flex-col items-center p-6 rounded-lg transition-colors text-center ${
+                    (volunteerPairs.length === 0 || clientGroups.length === 0)
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                      : 'bg-gray-50 hover:bg-gray-100 text-gray-900'
+                  }`}
+                  onClick={() => (volunteerPairs.length > 0 && clientGroups.length > 0) && setActiveTab('assignments')}
+                  disabled={volunteerPairs.length === 0 || clientGroups.length === 0}
                 >
-                  <Target size={48} />
-                  Create Assignments
-                </Link>
+                  <Target size={48} className={(volunteerPairs.length === 0 || clientGroups.length === 0) ? 'text-gray-400' : 'text-indigo-600'} />
+                  <span className="font-medium mt-3">Create Assignments</span>
+                </button>
               </div>
             </div>
 
-            {/* Info messages for disabled actions */}
+            {/* Info messages */}
             {selectedVolunteers === 0 && (
-              <div className="info-message">
-                <AlertTriangle size={16} />
-                You need to select volunteers before you can create pairs.
-              </div>
-            )}
-            
-            {selectedVolunteers === 0 && (
-              <div className="info-message">
-                <AlertTriangle size={16} />
-                You need to select volunteers before you can manage their training.
+              <div className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                <AlertTriangle size={16} className="text-amber-600" />
+                <span className="text-amber-800">You need to select volunteers before you can create pairs or manage training.</span>
               </div>
             )}
             
             {(volunteerPairs.length === 0 || clientGroups.length === 0) && (
-              <div className="info-message">
-                <AlertTriangle size={16} />
-                You need both volunteer pairs and client groups before creating assignments.
-                {volunteerPairs.length === 0 && (
-                  <ul>
-                    <li>Create volunteer pairs first ({volunteerPairs.length} pairs available)</li>
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                <div className="flex items-center gap-3 mb-2">
+                  <AlertTriangle size={16} className="text-amber-600" />
+                  <span className="text-amber-800 font-medium">Missing Requirements for Assignments</span>
+                </div>
+                <div className="text-amber-800 text-sm">
+                  You need both volunteer pairs and client groups before creating assignments.
+                  <ul className="list-disc list-inside mt-2 space-y-1">
+                    {volunteerPairs.length === 0 && (
+                      <li>Create volunteer pairs first ({volunteerPairs.length} pairs available)</li>
+                    )}
+                    {clientGroups.length === 0 && (
+                      <li>Create client groups first ({clientGroups.length} groups available)</li>
+                    )}
                   </ul>
-                )}
-                {clientGroups.length === 0 && (
-                  <ul>
-                    <li>Create client groups first ({clientGroups.length} groups available)</li>
-                  </ul>
-                )}
+                </div>
               </div>
             )}
           </div>
         );
         
       case 'volunteers':
-              return (
-                <div className="volunteers-tab">
-                  <div className="volunteers-header">
-                    <h3>Project Volunteers ({projectVolunteers.length})</h3>
-                    <div className="header-actions">
-                      <button 
-                        className="import-btn primary"
-                        onClick={() => setShowVolunteerImporter(true)}
-                      >
-                        <Users size={16} />
-                        Import More Volunteers
-                      </button>
-                      {projectVolunteers.length > 0 && (
-                        <button 
-                          className="clear-btn danger"
-                          onClick={() => setShowClearConfirm(true)}
-                        >
-                          <Trash2 size={16} />
-                          Clear All Volunteers
-                        </button>
-                      )}
-                    </div>
-                  </div>
+        return (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h3 className="text-xl font-semibold text-gray-900">Project Volunteers ({projectVolunteers.length})</h3>
+              <div className="flex gap-3">
+                <button 
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+                  onClick={() => setShowVolunteerImporter(true)}
+                >
+                  <Users size={16} />
+                  Import More Volunteers
+                </button>
+                {projectVolunteers.length > 0 && (
+                  <button 
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+                    onClick={() => setShowClearConfirm(true)}
+                  >
+                    <Trash2 size={16} />
+                    Clear All Volunteers
+                  </button>
+                )}
+              </div>
+            </div>
 
-                  {showVolunteerImporter && (
-                    <VolunteerCSVImporter 
-                      projectId={id}
-                      onImportComplete={handleImportComplete}
-                      onClose={() => setShowVolunteerImporter(false) && handleImportComplete()}  // Changed from onCancel to onClose
-                    />
-                  )}
-                  <VolunteerSelectionTable 
-                    key={refreshKey}
-                    projectId={id} 
-                    onImport={handleImportVolunteers}
-                    onClear={() => setShowClearConfirm(true)}
-                  />
-                </div>
-              );
+            {showVolunteerImporter && (
+              <VolunteerCSVImporter 
+                projectId={id}
+                onImportComplete={handleImportComplete}
+                onClose={() => setShowVolunteerImporter(false)}
+              />
+            )}
+            <VolunteerSelectionTable 
+              key={refreshKey}
+              projectId={id} 
+              onImport={handleImportVolunteers}
+              onClear={() => setShowClearConfirm(true)}
+            />
+          </div>
+        );
         
       case 'pairing':
         return (
@@ -666,135 +653,170 @@ const ProjectDetail = () => {
             onAssignmentsUpdate={loadProjectData}
           />
         );
+        
       case 'final':
-          return (
-            <FinalGroupingsTab 
-              key={refreshKey}
-              projectId={id}
-            />
-          );
+        return (
+          <FinalGroupingsTab 
+            key={refreshKey}
+            projectId={id}
+          />
+        );
 
       default:
-        return <div>Tab not found</div>;
+        return <div className="p-8 text-center text-gray-500">Tab not found</div>;
     }
   };
 
   return (
-    <div className="project-content">
+    <div className="w-full max-w-none">
       {/* Project Header */}
-      <div className="project-header">
-        <div className="header-top">
-          <Link to="/projects" className="back-link">
+      <div className="mb-8">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
+          <Link to="/projects" className="inline-flex items-center gap-2 text-indigo-600 hover:text-indigo-500 font-medium">
             <ArrowLeft size={16} /> Back to Projects
           </Link>
-          <div className="project-actions">
-            <button className="action-btn secondary">
+          <div className="flex gap-2">
+            <button className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
               <Share2 size={16} /> Share
             </button>
-            <button className="action-btn secondary">
+            <button className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
               <Settings size={16} /> Settings
             </button>
           </div>
         </div>
-        <div className="project-title-section">
-          <h1>{project.name}</h1>
-          <p className="project-description">{project.description}</p>
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">{project.name}</h1>
+          <p className="text-gray-600">{project.description}</p>
         </div>
       </div>
 
-      {/* Project Tabs */}
-      <div className="project-tabs">
-        <button 
-          className={`tab ${activeTab === 'overview' ? 'active' : ''}`}
-          onClick={() => setActiveTab('overview')}
-        >
-          <Settings size={16} />
-          Overview
-        </button>
-        <button 
-          className={`tab ${activeTab === 'volunteers' ? 'active' : ''}`}
-          onClick={() => setActiveTab('volunteers')}
-        >
-          <Users size={16} />
-          Volunteers ({projectVolunteers.length})
-        </button>
-        <button 
-          className={`tab ${activeTab === 'pairing' ? 'active' : ''}`}
-          onClick={() => setActiveTab('pairing')}
-        >
-          <Link2 size={16} />
-          Pairing ({volunteerPairs.length})
-        </button>
-        <button 
-          className={`tab ${activeTab === 'clients' ? 'active' : ''}`}
-          onClick={() => setActiveTab('clients')}
-        >
-          <UserCheck size={16} />
-          Clients ({projectClients.length})
-        </button>
-        <button 
-          className={`tab ${activeTab === 'assignments' ? 'active' : ''}`}
-          onClick={() => setActiveTab('assignments')}
-        >
-          <Target size={16} />
-          Assignments ({assignments.length})
-        </button>
-                <button 
-          className={`tab ${activeTab === 'training' ? 'active' : ''}`}
-          onClick={() => setActiveTab('training')}
-        >
-          <BookOpen size={16} />
-          Training Day
-        </button>
-        <button 
-          className={`tab ${activeTab === 'final' ? 'active' : ''}`}
-          onClick={() => setActiveTab('final')}
-        >
-          <CheckCircle size={16} />
-          Final Groupings
-        </button>
+      {/* Project Tabs - Fixed positioning */}
+      <div className="sticky top-0 bg-white border-b border-gray-200 mb-8 z-10">
+        <div className="overflow-x-auto">
+          <nav className="flex space-x-0 min-w-max">
+            <button 
+              className={`flex items-center gap-2 py-3 px-4 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
+                activeTab === 'overview' 
+                  ? 'border-indigo-500 text-indigo-600' 
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+              onClick={() => setActiveTab('overview')}
+            >
+              <Settings size={16} />
+              Overview
+            </button>
+            <button 
+              className={`flex items-center gap-2 py-3 px-4 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
+                activeTab === 'volunteers' 
+                  ? 'border-indigo-500 text-indigo-600' 
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+              onClick={() => setActiveTab('volunteers')}
+            >
+              <Users size={16} />
+              Volunteers ({projectVolunteers.length})
+            </button>
+            <button 
+              className={`flex items-center gap-2 py-3 px-4 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
+                activeTab === 'pairing' 
+                  ? 'border-indigo-500 text-indigo-600' 
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+              onClick={() => setActiveTab('pairing')}
+            >
+              <Link2 size={16} />
+              Pairing ({volunteerPairs.length})
+            </button>
+            <button 
+              className={`flex items-center gap-2 py-3 px-4 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
+                activeTab === 'clients' 
+                  ? 'border-indigo-500 text-indigo-600' 
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+              onClick={() => setActiveTab('clients')}
+            >
+              <UserCheck size={16} />
+              Clients ({projectClients.length})
+            </button>
+            <button 
+              className={`flex items-center gap-2 py-3 px-4 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
+                activeTab === 'assignments' 
+                  ? 'border-indigo-500 text-indigo-600' 
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+              onClick={() => setActiveTab('assignments')}
+            >
+              <Target size={16} />
+              Assignments ({assignments.length})
+            </button>
+            <button 
+              className={`flex items-center gap-2 py-3 px-4 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
+                activeTab === 'training' 
+                  ? 'border-indigo-500 text-indigo-600' 
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+              onClick={() => setActiveTab('training')}
+            >
+              <BookOpen size={16} />
+              Training Day
+            </button>
+            <button 
+              className={`flex items-center gap-2 py-3 px-4 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
+                activeTab === 'final' 
+                  ? 'border-indigo-500 text-indigo-600' 
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+              onClick={() => setActiveTab('final')}
+            >
+              <CheckCircle size={16} />
+              Final Groupings
+            </button>
+          </nav>
+        </div>
       </div>
 
       {/* Tab Content */}
-      {renderTabContent()}
+      <div className="w-full">
+        {renderTabContent()}
+      </div>
 
       {/* Clear Volunteers Confirmation Modal */}
       {showClearConfirm && (
-        <div className="modal-overlay">
-          <div className="modal confirm-modal">
-            <div className="modal-content">
-              <div className="warning-icon">
-                <AlertTriangle size={48} color="#e53e3e" />
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
+            <div className="p-6 text-center">
+              <div className="flex justify-center mb-4">
+                <AlertTriangle size={48} className="text-red-500" />
               </div>
-              <h2>Clear All Volunteers?</h2>
-              <p>
-                Are you sure you want to clear all <strong>{projectVolunteers.length} volunteers</strong> from this project?
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Clear All Volunteers?</h2>
+              <p className="text-gray-600 mb-4">
+                Are you sure you want to clear all <span className="font-semibold">{projectVolunteers.length} volunteers</span> from this project?
               </p>
-              <div className="warning-note">
-                <p><strong>Important:</strong></p>
-                <ul>
-                  <li>Volunteers will be removed from this project</li>
-                  <li>Volunteers only in this project will be completely deleted</li>
-                  <li>Volunteers in other projects will remain available</li>
-                  <li>All pairings and training data will be lost</li>
-                  <li>This action cannot be undone</li>
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6 text-left">
+                <p className="font-semibold text-amber-800 mb-2">Important:</p>
+                <ul className="text-sm text-amber-700 space-y-1">
+                  <li>• Volunteers will be removed from this project</li>
+                  <li>• Volunteers only in this project will be completely deleted</li>
+                  <li>• Volunteers in other projects will remain available</li>
+                  <li>• All pairings and training data will be lost</li>
+                  <li>• This action cannot be undone</li>
                 </ul>
               </div>
-              <div className="modal-actions">
+              <div className="flex gap-3 justify-end">
                 <button 
-                  className="cancel-btn" 
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors font-medium"
                   onClick={() => setShowClearConfirm(false)}
                 >
                   Cancel
                 </button>
                 <button 
-                  className="confirm-btn danger"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={handleClearVolunteers}
                   disabled={clearingVolunteers}
                 >
                   {clearingVolunteers ? (
                     <>
-                      <div className="spinner-small"></div>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                       Clearing...
                     </>
                   ) : (

@@ -203,9 +203,6 @@ const handleAutoGroupClients = async () => {
   }
 };
 
-
-
-
   const handleDeleteGroup = async (groupId) => {
     if (!window.confirm('Are you sure you want to delete this client group?')) {
       return;
@@ -546,9 +543,9 @@ const handleAutoGroupClients = async () => {
 
   if (loading) {
     return (
-      <div className="loading-container">
-        <div className="spinner"></div>
-        <div>Loading project clients...</div>
+      <div className="flex flex-col items-center justify-center min-h-96 space-y-4">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+        <div className="text-gray-600">Loading project clients...</div>
       </div>
     );
   }
@@ -558,32 +555,22 @@ const handleAutoGroupClients = async () => {
   const totalLocations = Object.keys(groupedClients).length;
 
 return (
-    <div className="clients-tab">
+    <div className="p-6 max-w-none w-full bg-gray-50 min-h-screen">
       
       {/* Auto-grouping Loading Modal */}
       {autoGroupingInProgress && (
-        <div className="modal-overlay" style={{ zIndex: 9999 }}>
-          <div className="modal">
-            <div className="modal-header">
-              <h2>
-                <Settings />
-                Auto-Generating Groups
-              </h2>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg max-w-md w-full mx-4">
+            <div className="flex items-center space-x-3 p-6 border-b border-gray-200">
+              <Settings className="h-6 w-6 text-blue-600" />
+              <h2 className="text-lg font-semibold text-gray-900">Auto-Generating Groups</h2>
             </div>
-            <div className="modal-form" style={{ textAlign: 'center', padding: '2rem' }}>
-              <div className="spinner" style={{ 
-                margin: '0 auto 1rem auto', 
-                width: '40px', 
-                height: '40px',
-                border: '4px solid #f3f3f3',
-                borderTop: '4px solid #3498db',
-                borderRadius: '50%',
-                animation: 'spin 1s linear infinite'
-              }}></div>
-              <p style={{ fontSize: '1.1rem', color: '#2d3748' }}>
+            <div className="p-6 text-center">
+              <div className="animate-spin rounded-full h-10 w-10 border-4 border-gray-200 border-t-blue-600 mx-auto mb-4"></div>
+              <p className="text-lg text-gray-800 mb-2">
                 Creating optimized client groups based on location...
               </p>
-              <p style={{ fontSize: '0.9rem', color: '#718096', marginTop: '0.5rem' }}>
+              <p className="text-sm text-gray-600">
                 This may take a few moments depending on the number of clients.
               </p>
             </div>
@@ -592,116 +579,116 @@ return (
       )}
       
       {/* Enhanced Header with Statistics */}
-      <div className="clients-header">
-        <div>
-          <h3>
-            <Users />
-            Client Management ({totalClients})
-            <span className="stat-subtitle">
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h3 className="flex items-center text-xl font-semibold text-gray-900 mb-2">
+              <Users className="h-5 w-5 mr-2" />
+              Client Management ({totalClients})
+            </h3>
+            <div className="text-sm text-gray-600">
               {totalLocations} Locations • {totalGroups} Groups
-            </span>
-          </h3>
-        </div>
-
-        <div className="header-actions">
-          <button
-            onClick={() => setShowImporter(true)}
-            className="import-clients-btn"
-          >
-            <Upload />
-            Import CSV
-          </button>
-          
-          {totalClients > 0 && (
-            <>
-            {/* Add this before your Auto Group All button */}
-            <div className="grouping-method-selector" style={{ marginBottom: '1rem', padding: '1rem', backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
-              <h4 style={{ marginBottom: '0.5rem', fontSize: '1rem' }}>Grouping Method</h4>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={useGeolocationGrouping}
-                  onChange={(e) => setUseGeolocationGrouping(e.target.checked)}
-                  style={{ marginRight: '0.5rem' }}
-                />
-                <span>Use GPS/Geolocation-based grouping</span>
-              </label>
-              <div style={{ fontSize: '0.875rem', color: '#6c757d', marginTop: '0.25rem' }}>
-                {useGeolocationGrouping 
-                  ? "Groups clients based on geographic proximity using address coordinates" 
-                  : "Groups clients based on their assigned location names (Central, East, West, etc.)"
-                }
-              </div>
             </div>
+          </div>
 
-            {/* Your existing Auto Group All button */}
+          <div className="flex flex-wrap items-center gap-3 mt-4 lg:mt-0">
             <button
-              onClick={handleAutoGroupClients}
-              className="group-clients-btn"
-              disabled={loading || autoGroupingInProgress}
+              onClick={() => setShowImporter(true)}
+              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
             >
-              {autoGroupingInProgress ? (
-                <>
-                  <div className="spinner-small"></div>
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Settings />
-                  Auto Group All ({useGeolocationGrouping ? 'GPS' : 'Location'})
-                </>
-              )}
+              <Upload className="h-4 w-4 mr-2" />
+              Import CSV
             </button>
+            
+            {totalClients > 0 && (
+              <>
+                {/* Grouping Method Selector */}
+                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                  <h4 className="text-sm font-medium text-gray-900 mb-2">Grouping Method</h4>
+                  <label className="flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={useGeolocationGrouping}
+                      onChange={(e) => setUseGeolocationGrouping(e.target.checked)}
+                      className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">Use GPS/Geolocation-based grouping</span>
+                  </label>
+                  <div className="text-xs text-gray-500 mt-1">
+                    {useGeolocationGrouping 
+                      ? "Groups clients based on geographic proximity using address coordinates" 
+                      : "Groups clients based on their assigned location names (Central, East, West, etc.)"
+                    }
+                  </div>
+                </div>
 
-              {totalGroups > 0 && (
                 <button
-                  onClick={handleDeleteAllGroups}
-                  className="group-clients-btn"
-                  style={{ backgroundColor: '#f59e0b' }}
+                  onClick={handleAutoGroupClients}
+                  disabled={loading || autoGroupingInProgress}
+                  className="inline-flex items-center px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
                 >
-                  <Grid />
-                  Clear All Groups
+                  {autoGroupingInProgress ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Settings className="h-4 w-4 mr-2" />
+                      Auto Group All ({useGeolocationGrouping ? 'GPS' : 'Location'})
+                    </>
+                  )}
                 </button>
-              )}
-              
-              <button
-                onClick={() => setShowRemoveAllModal(true)}
-                className="clear-btn danger"
-              >
-                <Trash2 />
-                Remove All
-              </button>
-            </>
-          )}
+
+                {totalGroups > 0 && (
+                  <button
+                    onClick={handleDeleteAllGroups}
+                    className="inline-flex items-center px-4 py-2 bg-amber-500 text-white text-sm font-medium rounded-lg hover:bg-amber-600 transition-colors shadow-sm"
+                  >
+                    <Grid className="h-4 w-4 mr-2" />
+                    Clear All Groups
+                  </button>
+                )}
+                
+                <button
+                  onClick={() => setShowRemoveAllModal(true)}
+                  className="inline-flex items-center px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors shadow-sm"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Remove All
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
-
       {/* Enhanced Filters Section */}
-      <div className="filters-section">
-        <div className="search-filter">
-          <Search />
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+        <div className="relative mb-4">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
           <input
             type="text"
             placeholder="Search clients by name, location, SRC ID, address, or language..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
           {(searchTerm || filterByLocation) && (
             <button
               onClick={clearSearch}
-              className="btn-icon"
-              style={{ position: 'absolute', right: '0.75rem', background: 'none', border: 'none' }}
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
             >
-              <X />
+              <X className="h-4 w-4" />
             </button>
           )}
         </div>
 
-        <div className="filter-controls">
+        <div className="flex flex-wrap items-center gap-4">
           <select
             value={filterByLocation}
             onChange={(e) => setFilterByLocation(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
           >
             <option value="">All Locations</option>
             {uniqueLocations.map(location => (
@@ -714,6 +701,7 @@ return (
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
           >
             <option value="location">Sort by Location</option>
             <option value="count">Sort by Client Count</option>
@@ -722,14 +710,14 @@ return (
 
           <button
             onClick={toggleAllLocations}
-            className="btn-icon"
+            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
             title={Object.values(expandedLocations).every(Boolean) ? "Collapse All" : "Expand All"}
           >
-            {Object.values(expandedLocations).every(Boolean) ? <ChevronUp /> : <ChevronDown />}
+            {Object.values(expandedLocations).every(Boolean) ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </button>
 
           {Object.keys(filteredAndSortedClients).length > 0 && (
-            <div className="results-info">
+            <div className="text-sm text-gray-600">
               Showing {Object.keys(filteredAndSortedClients).length} of {totalLocations} locations
             </div>
           )}
@@ -738,22 +726,22 @@ return (
 
       {/* Error Display */}
       {Object.keys(errors).length > 0 && (
-        <div className="error-banner">
+        <div className="mb-6">
           {Object.entries(errors).map(([key, error]) => (
-            <div key={key} className="error-message">
-              <AlertTriangle />
-              {error}
+            <div key={key} className="flex items-center p-4 mb-2 bg-red-50 border border-red-200 rounded-lg">
+              <AlertTriangle className="h-5 w-5 text-red-600 mr-3" />
+              <div className="text-sm text-red-800">{error}</div>
             </div>
           ))}
         </div>
       )}
 
       {/* Location-based Client Display with Enhanced Groups */}
-      <div className="client-management-container">
+      <div className="space-y-6">
         {Object.keys(filteredAndSortedClients).length === 0 ? (
-          <div className="empty-state">
-            <Users className="empty-icon" />
-            <h3 className="empty-title">
+          <div className="text-center py-12">
+            <Users className="mx-auto h-12 w-12 text-gray-300 mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
               {totalClients === 0 
                 ? "Import clients from a CSV file to get started"
                 : "No clients match your search criteria"
@@ -762,16 +750,16 @@ return (
             {totalClients === 0 && (
               <button
                 onClick={() => setShowImporter(true)}
-                className="create-first-btn"
+                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors mt-4"
               >
-                <Upload />
+                <Upload className="h-4 w-4 mr-2" />
                 Import Clients
               </button>
             )}
             {totalClients > 0 && (
               <button
                 onClick={clearSearch}
-                className="btn"
+                className="inline-flex items-center px-4 py-2 bg-gray-600 text-white text-sm font-medium rounded-lg hover:bg-gray-700 transition-colors mt-4"
               >
                 Clear Search
               </button>
@@ -784,208 +772,202 @@ return (
             const stats = locationStats[location] || {};
             
             return (
-              <div key={location} className="location-group">
+              <div key={location} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
                 <div 
-                  className="location-header"
+                  className="p-4 bg-gray-50 border-b border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors"
                   onClick={() => toggleLocationExpansion(location)}
-                  style={{ cursor: 'pointer' }}
                 >
-                  <div className="location-title">
-                    {expandedLocations[location] ? (
-                      <ChevronDown />
-                    ) : (
-                      <ChevronRight />
-                    )}
-                    <MapPin />
-                    <span>{location}</span>
-                    <span className="client-count">{clients.length} clients</span>
-                    {locationGroups.length > 0 && (
-                      <span className="client-count" style={{ backgroundColor: '#38a169' }}>
-                        {locationGroups.length} groups
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      {expandedLocations[location] ? (
+                        <ChevronDown className="h-5 w-5 text-gray-500" />
+                      ) : (
+                        <ChevronRight className="h-5 w-5 text-gray-500" />
+                      )}
+                      <MapPin className="h-5 w-5 text-blue-600" />
+                      <span className="font-medium text-gray-900">{location}</span>
+                      <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full font-medium">
+                        {clients.length} clients
                       </span>
-                    )}
-                    {ungroupedClients.length > 0 && (
-                      <span className="client-count" style={{ backgroundColor: '#f59e0b' }}>
-                        {ungroupedClients.length} ungrouped
-                      </span>
-                    )}
-                  </div>
-                  
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <div className="location-stats-mini">
-                      <div style={{ fontSize: '0.875rem', color: '#718096', display: 'flex', gap: '1rem' }}>
+                      {locationGroups.length > 0 && (
+                        <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full font-medium">
+                          {locationGroups.length} groups
+                        </span>
+                      )}
+                      {ungroupedClients.length > 0 && (
+                        <span className="px-2 py-1 bg-amber-100 text-amber-800 text-xs rounded-full font-medium">
+                          {ungroupedClients.length} ungrouped
+                        </span>
+                      )}
+                    </div>
+                    
+                    <div className="flex items-center space-x-4">
+                      <div className="flex items-center space-x-4 text-sm text-gray-600">
                         <span title="Languages">🗣️ {stats.languages || 0}</span>
                         <span title="Races">👥 {stats.races || 0}</span>
                         <span title="Genders">⚧ {stats.genders || 0}</span>
                       </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openGroupCreatorForLocation(location);
+                        }}
+                        className="p-1 text-green-600 hover:bg-green-100 rounded transition-colors"
+                        title="Create group for this location"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
                     </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openGroupCreatorForLocation(location);
-                      }}
-                      className="btn-icon"
-                      style={{ color: '#38a169' }}
-                      title="Create group for this location"
-                    >
-                      <Plus />
-                    </button>
                   </div>
                 </div>
                 
                 {expandedLocations[location] && (
-                  <div style={{ padding: '1rem', background: 'white' }}>
+                  <div className="p-6">
                     {/* Enhanced Location Statistics */}
                     {stats && (
-                      <div className="location-stats">
-                        <div className="location-stat">
-                          <div className="location-stat-number">{stats.total}</div>
-                          <div className="location-stat-label">Total Clients</div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
+                          <div className="text-xs text-gray-500 uppercase tracking-wide">Total Clients</div>
                         </div>
-                        <div className="location-stat">
-                          <div className="location-stat-number">{locationGroups.length}</div>
-                          <div className="location-stat-label">Groups</div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-gray-900">{locationGroups.length}</div>
+                          <div className="text-xs text-gray-500 uppercase tracking-wide">Groups</div>
                         </div>
-                        <div className="location-stat">
-                          <div className="location-stat-number">{ungroupedClients.length}</div>
-                          <div className="location-stat-label">Ungrouped</div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-gray-900">{ungroupedClients.length}</div>
+                          <div className="text-xs text-gray-500 uppercase tracking-wide">Ungrouped</div>
                         </div>
-                        <div className="location-stat">
-                          <div className="location-stat-number">{stats.languages}</div>
-                          <div className="location-stat-label">Languages</div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-gray-900">{stats.languages}</div>
+                          <div className="text-xs text-gray-500 uppercase tracking-wide">Languages</div>
                         </div>
                       </div>
                     )}
 
                     {/* Existing Groups for this Location */}
                     {locationGroups.map((group) => (
-                      <div key={group.id} className="group-container">
+                      <div key={group.id} className="border border-gray-200 rounded-lg overflow-hidden mb-4">
                         <div 
-                          className="group-header"
+                          className="p-4 bg-gray-50 border-b border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors"
                           onClick={() => toggleGroupExpansion(group.id)}
-                          style={{ cursor: 'pointer' }}
                         >
-                          <div className="group-title">
-                            {expandedGroups[group.id] ? (
-                              <ChevronDown />
-                            ) : (
-                              <ChevronRight />
-                            )}
-                            <Grid />
-                            <div className="group-info">
-                              <div className="group-name">{group.name}</div>
-                              <div style={{ fontSize: '0.875rem', color: '#718096', display: 'flex', gap: '1rem' }}>
-                                <span className="mandatory-count">
-                                  M: {group.groupClients.filter(gc => gc.type === 'MANDATORY').length}/3
-                                </span>
-                                <span className="optional-count">
-                                  O: {group.groupClients.filter(gc => gc.type === 'OPTIONAL').length}/2
-                                </span>
-                                <span className="total-count">
-                                  Total: {group.groupClients.length}/5
-                                </span>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                              {expandedGroups[group.id] ? (
+                                <ChevronDown className="h-4 w-4 text-gray-500" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4 text-gray-500" />
+                              )}
+                              <Grid className="h-4 w-4 text-green-600" />
+                              <div>
+                                <div className="font-medium text-gray-900">{group.name}</div>
+                                <div className="flex items-center space-x-4 text-sm text-gray-600">
+                                  <span>M: {group.groupClients.filter(gc => gc.type === 'MANDATORY').length}/3</span>
+                                  <span>O: {group.groupClients.filter(gc => gc.type === 'OPTIONAL').length}/2</span>
+                                  <span>Total: {group.groupClients.length}/5</span>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                          <div className="group-actions">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openGroupEditor(group);
-                              }}
-                              className="btn-icon"
-                              style={{ color: '#4299e1' }}
-                              title="Edit group"
-                            >
-                              <Edit />
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteGroup(group.id);
-                              }}
-                              className="delete-group-btn"
-                              title="Delete group"
-                            >
-                              <Trash2 />
-                            </button>
+                            <div className="flex items-center space-x-2">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openGroupEditor(group);
+                                }}
+                                className="p-1 text-blue-600 hover:bg-blue-100 rounded transition-colors"
+                                title="Edit group"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteGroup(group.id);
+                                }}
+                                className="p-1 text-red-600 hover:bg-red-100 rounded transition-colors"
+                                title="Delete group"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
                           </div>
                         </div>
                         
                         {expandedGroups[group.id] && (
-                          <div className="group-clients">
+                          <div className="p-4">
                             {/* Mandatory Clients */}
-                            <div className="client-section">
-                              <h6 className="section-title mandatory">
-                                <UserCheck />
+                            <div className="mb-6">
+                              <h6 className="flex items-center text-sm font-medium text-red-700 mb-3">
+                                <UserCheck className="h-4 w-4 mr-2" />
                                 Mandatory ({group.groupClients.filter(gc => gc.type === 'MANDATORY').length}/3)
                               </h6>
                               {group.groupClients.filter(gc => gc.type === 'MANDATORY').length > 0 ? (
-                                <div className="clients-grid">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                   {group.groupClients
                                     .filter(gc => gc.type === 'MANDATORY')
                                     .sort((a, b) => a.priority - b.priority)
                                     .map((gc) => (
-                                      <div key={gc.id} className="client-card mandatory">
-                                        <div className="client-card-header">
-                                          <div className="client-name-section">
-                                            <h4>{gc.client.name}</h4>
-                                            <div className="client-src-id">({gc.client.srcId})</div>
-                                          </div>
-                                          <div className="client-type-badge mandatory">Mandatory</div>
+                                      <div key={gc.id} className="border border-red-200 rounded-lg p-4 bg-red-50">
+                                        <div className="flex items-center justify-between mb-2">
+                                          <h4 className="font-medium text-gray-900">{gc.client.name}</h4>
+                                          <span className="px-2 py-1 bg-red-200 text-red-800 text-xs rounded-full font-medium">
+                                            Mandatory
+                                          </span>
                                         </div>
-                                        <div className="client-details-section">
+                                        <div className="text-xs text-blue-600 font-medium mb-2">({gc.client.srcId})</div>
+                                        <div className="space-y-1 text-sm text-gray-600">
                                           {gc.client.gender && (
-                                            <div className="client-detail-row">
-                                              <Users />
+                                            <div className="flex items-center">
+                                              <Users className="h-3 w-3 mr-1" />
                                               <span>{gc.client.gender}</span>
                                             </div>
                                           )}
-                                          <div className="client-detail-row">
-                                            <MapPin />
-                                            <span>{gc.client.address}</span>
+                                          <div className="flex items-start">
+                                            <MapPin className="h-3 w-3 mr-1 mt-0.5 flex-shrink-0" />
+                                            <span className="break-words">{gc.client.address}</span>
                                           </div>
                                         </div>
                                       </div>
                                     ))}
                                 </div>
                               ) : (
-                                <div className="empty-section">
-                                  <span>No mandatory clients assigned</span>
+                                <div className="text-gray-500 italic text-sm">
+                                  No mandatory clients assigned
                                 </div>
                               )}
                             </div>
 
                             {/* Optional Clients */}
                             {group.groupClients.filter(gc => gc.type === 'OPTIONAL').length > 0 && (
-                              <div className="client-section">
-                                <h6 className="section-title optional">
-                                  <UserMinus />
+                              <div>
+                                <h6 className="flex items-center text-sm font-medium text-blue-700 mb-3">
+                                  <UserMinus className="h-4 w-4 mr-2" />
                                   Optional ({group.groupClients.filter(gc => gc.type === 'OPTIONAL').length}/2)
                                 </h6>
-                                <div className="clients-grid">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                   {group.groupClients
                                     .filter(gc => gc.type === 'OPTIONAL')
                                     .sort((a, b) => a.priority - b.priority)
                                     .map((gc) => (
-                                      <div key={gc.id} className="client-card optional">
-                                        <div className="client-card-header">
-                                          <div className="client-name-section">
-                                            <h4>{gc.client.name}</h4>
-                                            <div className="client-src-id">({gc.client.srcId})</div>
-                                          </div>
-                                          <div className="client-type-badge optional">Optional</div>
+                                      <div key={gc.id} className="border border-blue-200 rounded-lg p-4 bg-blue-50">
+                                        <div className="flex items-center justify-between mb-2">
+                                          <h4 className="font-medium text-gray-900">{gc.client.name}</h4>
+                                          <span className="px-2 py-1 bg-blue-200 text-blue-800 text-xs rounded-full font-medium">
+                                            Optional
+                                          </span>
                                         </div>
-                                        <div className="client-details-section">
+                                        <div className="text-xs text-blue-600 font-medium mb-2">({gc.client.srcId})</div>
+                                        <div className="space-y-1 text-sm text-gray-600">
                                           {gc.client.gender && (
-                                            <div className="client-detail-row">
-                                              <Users />
+                                            <div className="flex items-center">
+                                              <Users className="h-3 w-3 mr-1" />
                                               <span>{gc.client.gender}</span>
                                             </div>
                                           )}
-                                          <div className="client-detail-row">
-                                            <MapPin />
-                                            <span>{gc.client.address}</span>
+                                          <div className="flex items-start">
+                                            <MapPin className="h-3 w-3 mr-1 mt-0.5 flex-shrink-0" />
+                                            <span className="break-words">{gc.client.address}</span>
                                           </div>
                                         </div>
                                       </div>
@@ -1000,51 +982,51 @@ return (
 
                     {/* Ungrouped Clients */}
                     {ungroupedClients.length > 0 && (
-                      <div className="client-section">
-                        <h5 style={{ fontWeight: '500', color: '#2d3748', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <Users style={{ width: '1rem', height: '1rem', color: '#718096' }} />
-                          Ungrouped Clients ({ungroupedClients.length})
+                      <div>
+                        <div className="flex items-center justify-between mb-4">
+                          <h5 className="flex items-center font-medium text-gray-900">
+                            <Users className="h-4 w-4 mr-2 text-gray-500" />
+                            Ungrouped Clients ({ungroupedClients.length})
+                          </h5>
                           <button
                             onClick={() => openGroupCreatorForLocation(location)}
-                            className="btn-small"
-                            style={{ background: '#38a169', color: 'white', marginLeft: '0.5rem' }}
+                            className="inline-flex items-center px-3 py-1 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors"
                           >
-                            <Plus style={{ width: '0.75rem', height: '0.75rem' }} />
+                            <Plus className="h-3 w-3 mr-1" />
                             Group These
                           </button>
-                        </h5>
-                        <div className="location-clients-grid">
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                           {ungroupedClients.map((pc) => (
-                            <div key={pc.id} className="client-card">
-                              <div className="client-card-header">
-                                <div className="client-name-section">
-                                  <h4>{pc.client.name}</h4>
-                                  <div className="client-src-id">{pc.client.srcId}</div>
-                                </div>
-                                <div className="client-actions">
-                                  <button
-                                    onClick={() => handleRemoveClient(pc.id)}
-                                    className="remove-client-btn"
-                                    title="Remove from project"
-                                  >
-                                    <Trash2 />
-                                  </button>
-                                </div>
+                            <div key={pc.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                              <div className="flex items-center justify-between mb-2">
+                                <h4 className="font-medium text-gray-900">{pc.client.name}</h4>
+                                <button
+                                  onClick={() => handleRemoveClient(pc.id)}
+                                  className="p-1 text-red-600 hover:bg-red-100 rounded transition-colors"
+                                  title="Remove from project"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
                               </div>
-                              <div className="client-details-section">
+                              <div className="text-sm text-blue-600 font-medium mb-2">{pc.client.srcId}</div>
+                              <div className="space-y-1 text-sm text-gray-600">
                                 {pc.client.gender && (
-                                  <div className="client-detail-row">
-                                    <Users />
-                                    <span>{pc.client.gender} {pc.client.race && `• ${pc.client.race}`}</span>
+                                  <div className="flex items-center">
+                                    <Users className="h-3 w-3 mr-1" />
+                                    <span>
+                                      {pc.client.gender} 
+                                      {pc.client.race && ` • ${pc.client.race}`}
+                                    </span>
                                   </div>
                                 )}
-                                <div className="client-detail-row">
-                                  <MapPin />
-                                  <span>{pc.client.address}</span>
+                                <div className="flex items-start">
+                                  <MapPin className="h-3 w-3 mr-1 mt-0.5 flex-shrink-0" />
+                                  <span className="break-words">{pc.client.address}</span>
                                 </div>
                                 {pc.client.languages && (
-                                  <div className="client-detail-row">
-                                    <Globe />
+                                  <div className="flex items-center">
+                                    <Globe className="h-3 w-3 mr-1" />
                                     <span>Languages: {pc.client.languages}</span>
                                   </div>
                                 )}
@@ -1057,24 +1039,24 @@ return (
 
                     {/* Enhanced Inline Group Creator */}
                     {showGroupCreatorForLocation === location && (
-                      <div className="group-creator-panel">
-                        <div className="group-creator-header">
-                          <h5>
+                      <div className="mt-6 border-2 border-dashed border-gray-300 rounded-lg p-6 bg-gray-50">
+                        <div className="flex items-center justify-between mb-4">
+                          <h5 className="text-lg font-medium text-gray-900">
                             {editingGroup ? 'Edit Group' : 'Create New Group'} for {location}
                           </h5>
                           <button
                             onClick={() => setShowGroupCreatorForLocation(null)}
-                            className="btn-icon"
+                            className="p-1 text-gray-400 hover:text-gray-600"
                           >
-                            <X />
+                            <X className="h-5 w-5" />
                           </button>
                         </div>
                         
                         {/* Group Name Input */}
-                        <div className="form-group">
-                          <label>
+                        <div className="mb-6">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
                             Group Name *
-                            {errors.name && <span className="error-text">{errors.name}</span>}
+                            {errors.name && <span className="text-red-600 ml-2">{errors.name}</span>}
                           </label>
                           <input
                             type="text"
@@ -1086,138 +1068,148 @@ return (
                               }
                             }}
                             placeholder="e.g., Group A, Morning Group, etc."
-                            className={errors.name ? 'error' : ''}
+                            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                              errors.name ? 'border-red-300' : 'border-gray-300'
+                            }`}
                           />
                         </div>
 
                         {/* Client Selection Grid */}
-                        <div className="client-selection-grid">
+                        <div className="grid md:grid-cols-2 gap-6 mb-6">
                           {/* Mandatory Clients */}
-                          <div className="selection-column">
-                            <h6 className="selection-title mandatory">
-                              <UserCheck />
+                          <div>
+                            <h6 className="flex items-center text-sm font-medium text-red-700 mb-3">
+                              <UserCheck className="h-4 w-4 mr-2" />
                               Mandatory Clients ({newGroupForm.mandatoryClients.length}/3)
-                              {errors.mandatory && <span className="error-text">{errors.mandatory}</span>}
+                              {errors.mandatory && <span className="text-red-600 ml-2">{errors.mandatory}</span>}
                             </h6>
-                            <div className="selected-clients-list">
+                            <div className="min-h-32 border-2 border-dashed border-red-300 rounded-lg p-3 bg-red-50">
                               {newGroupForm.mandatoryClients.length === 0 ? (
-                                <div className="empty-selection">
+                                <div className="text-sm text-gray-500 italic text-center py-8">
                                   Select mandatory clients from the list below
                                 </div>
                               ) : (
-                                newGroupForm.mandatoryClients.map((client) => (
-                                  <div key={client.id} className="selected-client mandatory">
-                                    <div className="client-info">
-                                      <span className="client-name">{client.name}</span>
-                                      <span className="client-id">({client.srcId})</span>
+                                <div className="space-y-2">
+                                  {newGroupForm.mandatoryClients.map((client) => (
+                                    <div key={client.id} className="flex items-center justify-between p-2 bg-white rounded border border-red-200">
+                                      <div>
+                                        <span className="font-medium text-gray-900">{client.name}</span>
+                                        <span className="text-sm text-gray-500 ml-2">({client.srcId})</span>
+                                      </div>
+                                      <button
+                                        onClick={() => removeClientFromGroup(client.id, 'mandatory')}
+                                        className="p-1 text-red-600 hover:bg-red-100 rounded"
+                                      >
+                                        <X className="h-4 w-4" />
+                                      </button>
                                     </div>
-                                    <button
-                                      onClick={() => removeClientFromGroup(client.id, 'mandatory')}
-                                      className="remove-btn"
-                                    >
-                                      <X />
-                                    </button>
-                                  </div>
-                                ))
+                                  ))}
+                                </div>
                               )}
                             </div>
                           </div>
 
                           {/* Optional Clients */}
-                          <div className="selection-column">
-                            <h6 className="selection-title optional">
-                              <UserMinus />
+                          <div>
+                            <h6 className="flex items-center text-sm font-medium text-blue-700 mb-3">
+                              <UserMinus className="h-4 w-4 mr-2" />
                               Optional Clients ({newGroupForm.optionalClients.length}/2)
-                              {errors.optional && <span className="error-text">{errors.optional}</span>}
+                              {errors.optional && <span className="text-red-600 ml-2">{errors.optional}</span>}
                             </h6>
-                            <div className="selected-clients-list">
+                            <div className="min-h-32 border-2 border-dashed border-blue-300 rounded-lg p-3 bg-blue-50">
                               {newGroupForm.optionalClients.length === 0 ? (
-                                <div className="empty-selection">
+                                <div className="text-sm text-gray-500 italic text-center py-8">
                                   Optionally select additional clients
                                 </div>
                               ) : (
-                                newGroupForm.optionalClients.map((client) => (
-                                  <div key={client.id} className="selected-client optional">
-                                    <div className="client-info">
-                                      <span className="client-name">{client.name}</span>
-                                      <span className="client-id">({client.srcId})</span>
+                                <div className="space-y-2">
+                                  {newGroupForm.optionalClients.map((client) => (
+                                    <div key={client.id} className="flex items-center justify-between p-2 bg-white rounded border border-blue-200">
+                                      <div>
+                                        <span className="font-medium text-gray-900">{client.name}</span>
+                                        <span className="text-sm text-gray-500 ml-2">({client.srcId})</span>
+                                      </div>
+                                      <button
+                                        onClick={() => removeClientFromGroup(client.id, 'optional')}
+                                        className="p-1 text-blue-600 hover:bg-blue-100 rounded"
+                                      >
+                                        <X className="h-4 w-4" />
+                                      </button>
                                     </div>
-                                    <button
-                                      onClick={() => removeClientFromGroup(client.id, 'optional')}
-                                      className="remove-btn"
-                                    >
-                                      <X />
-                                    </button>
-                                  </div>
-                                ))
+                                  ))}
+                                </div>
                               )}
                             </div>
                           </div>
                         </div>
 
                         {/* Available Clients */}
-                        <div className="available-clients-section">
-                          <h6>Available Clients for {location}</h6>
-                          <div className="available-clients-list">
+                        <div className="mb-6">
+                          <h6 className="text-sm font-medium text-gray-900 mb-3">Available Clients for {location}</h6>
+                          <div className="max-h-64 overflow-y-auto border border-gray-300 rounded-lg bg-white">
                             {getAvailableClientsForLocation(location).length === 0 ? (
-                              <div className="no-clients-available">
+                              <div className="p-4 text-center text-gray-500">
                                 No available clients for this location
                               </div>
                             ) : (
-                              getAvailableClientsForLocation(location).map((client) => (
-                                <div key={client.id} className="available-client">
-                                  <div className="client-info">
-                                    <div className="client-name">{client.name}</div>
-                                    <div className="client-details">
-                                      {client.srcId} {client.gender && `• ${client.gender}`} {client.race && `• ${client.race}`}
+                              <div className="divide-y divide-gray-200">
+                                {getAvailableClientsForLocation(location).map((client) => (
+                                  <div key={client.id} className="flex items-center justify-between p-3 hover:bg-gray-50">
+                                    <div className="flex-1">
+                                      <div className="font-medium text-gray-900">{client.name}</div>
+                                      <div className="text-sm text-gray-500">
+                                        {client.srcId} 
+                                        {client.gender && ` • ${client.gender}`} 
+                                        {client.race && ` • ${client.race}`}
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                      <button
+                                        onClick={() => addClientToGroup(client, 'mandatory')}
+                                        disabled={newGroupForm.mandatoryClients.length >= 3}
+                                        className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        title="Add as mandatory"
+                                      >
+                                        + M
+                                      </button>
+                                      <button
+                                        onClick={() => addClientToGroup(client, 'optional')}
+                                        disabled={newGroupForm.optionalClients.length >= 2}
+                                        className="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        title="Add as optional"
+                                      >
+                                        + O
+                                      </button>
                                     </div>
                                   </div>
-                                  <div className="client-actions">
-                                    <button
-                                      onClick={() => addClientToGroup(client, 'mandatory')}
-                                      disabled={newGroupForm.mandatoryClients.length >= 3}
-                                      className="add-btn mandatory"
-                                      title="Add as mandatory"
-                                    >
-                                      + M
-                                    </button>
-                                    <button
-                                      onClick={() => addClientToGroup(client, 'optional')}
-                                      disabled={newGroupForm.optionalClients.length >= 2}
-                                      className="add-btn optional"
-                                      title="Add as optional"
-                                    >
-                                      + O
-                                    </button>
-                                  </div>
-                                </div>
-                              ))
+                                ))}
+                              </div>
                             )}
                           </div>
                         </div>
 
                         {/* Action Buttons */}
-                        <div className="group-creator-actions">
+                        <div className="flex items-center justify-end space-x-3">
                           <button
                             onClick={() => setShowGroupCreatorForLocation(null)}
                             disabled={creatingGroup}
-                            className="cancel-btn"
+                            className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50"
                           >
                             Cancel
                           </button>
                           <button
                             onClick={handleCreateOrUpdateGroup}
                             disabled={creatingGroup || !newGroupForm.name.trim() || newGroupForm.mandatoryClients.length === 0}
-                            className="submit-btn"
+                            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {creatingGroup ? (
                               <>
-                                <div className="spinner-small"></div>
+                                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
                                 {editingGroup ? 'Updating...' : 'Creating...'}
                               </>
                             ) : (
                               <>
-                                <Save />
+                                <Save className="h-4 w-4 mr-2" />
                                 {editingGroup ? 'Update Group' : 'Create Group'}
                               </>
                             )}
@@ -1235,55 +1227,53 @@ return (
 
       {/* Remove All Clients Modal */}
       {showRemoveAllModal && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <div className="modal-header">
-              <h2>
-                <AlertTriangle />
-                Remove All Clients
-              </h2>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg max-w-md w-full mx-4">
+            <div className="flex items-center space-x-3 p-6 border-b border-gray-200">
+              <AlertTriangle className="h-6 w-6 text-red-600" />
+              <h2 className="text-lg font-semibold text-gray-900">Remove All Clients</h2>
               <button
-                className="close-btn"
+                className="ml-auto p-1 text-gray-400 hover:text-gray-600"
                 onClick={() => setShowRemoveAllModal(false)}
               >
-                <X />
+                <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="modal-form">
-              <p>
+            <div className="p-6">
+              <p className="text-gray-700 mb-4">
                 Are you sure you want to remove all <strong>{totalClients} clients</strong> from this project?
               </p>
-              <div className="warning-note">
-                <p>
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <p className="text-amber-800 font-medium mb-2">
                   <strong>Warning:</strong> This action cannot be undone and will:
                 </p>
-                <ul>
-                  <li>Remove all clients from this project</li>
-                  <li>Delete all client groups</li>
-                  <li>Remove any assignments involving these clients</li>
+                <ul className="text-sm text-amber-700 space-y-1 ml-4">
+                  <li>• Remove all clients from this project</li>
+                  <li>• Delete all client groups</li>
+                  <li>• Remove any assignments involving these clients</li>
                 </ul>
               </div>
-              <div className="modal-actions">
+              <div className="flex items-center justify-end space-x-3 mt-6">
                 <button
                   onClick={() => setShowRemoveAllModal(false)}
                   disabled={removingAll}
-                  className="cancel-btn"
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleRemoveAllClients}
                   disabled={removingAll}
-                  className="confirm-btn danger"
+                  className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
                 >
                   {removingAll ? (
                     <>
-                      <div className="spinner-small"></div>
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
                       Removing...
                     </>
                   ) : (
                     <>
-                      <Trash2 />
+                      <Trash2 className="h-4 w-4 mr-2" />
                       Remove All Clients
                     </>
                   )}
