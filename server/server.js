@@ -791,6 +791,10 @@ app.get('/api/volunteers', authenticateToken, async (req, res) => {
   try {
     const { search, region, language, experience, hasGroup } = req.query;
     
+    // Debug: Log the user info and query parameters
+    console.log('User ID:', req.user.userId);
+    console.log('Query params:', { search, region, language, experience, hasGroup });
+    
     const where = {
       OR: [
         { createdById: req.user.userId },
@@ -826,6 +830,9 @@ app.get('/api/volunteers', authenticateToken, async (req, res) => {
       where.isJoiningAsGroup = hasGroup === 'true';
     }
 
+    // Debug: Log the final where clause
+    console.log('Final where clause:', JSON.stringify(where, null, 2));
+
     const volunteers = await prisma.volunteer.findMany({
       where,
       include: {
@@ -835,6 +842,15 @@ app.get('/api/volunteers', authenticateToken, async (req, res) => {
       },
       orderBy: { createdAt: 'desc' }
     });
+
+    // Debug: Log the results
+    console.log('Found volunteers count:', volunteers.length);
+    console.log('First volunteer (if any):', volunteers ? {
+      id: volunteers.id,
+      firstName: volunteers.firstName,
+      createdById: volunteers.createdById,
+      isPublic: volunteers.isPublic
+    } : 'None');
 
     res.json(volunteers);
   } catch (error) {
@@ -1215,33 +1231,70 @@ app.delete('/api/projects/:id/clients', authenticateToken, checkProjectAccess, a
       .map(pc => pc.clientId)
       .filter(id => id != null);
 
-    // Step 2: Delete all project-client relationships for this project first
-    const projectClientResult = await prisma.projectClient.deleteMany({
-      where: { projectId: projectId }
-    });
+    console.log('Clients to completely delete:', clientIdsToCompletelyDelete);
 
-    // Step 3: Delete clients that were only in this project (only if we have valid IDs)
-    let deletedClientsResult = { count: 0 };
-    if (clientIdsToCompletelyDelete.length > 0) {
-      console.log('Deleting clients with IDs:', clientIdsToCompletelyDelete); // Debug log
-      deletedClientsResult = await prisma.client.deleteMany({
+    // Use a transaction to ensure all deletions succeed or fail together
+    const result = await prisma.$transaction(async (tx) => {
+      // Step 2: Delete assignments that reference clients in this project
+      const deletedAssignmentsResult = await tx.assignment.deleteMany({
+        where: { projectId: projectId }
+      });
+
+      // Step 3: Delete group clients (client group memberships) for this project
+      // This needs to be done before deleting client groups or clients
+      const deletedGroupClientsResult = await tx.groupClient.deleteMany({
         where: {
-          id: {
-            in: clientIdsToCompletelyDelete
+          group: {
+            projectId: projectId
           }
         }
       });
-    }
 
-    // Step 4: Log the action
+      // Step 4: Delete client groups for this project
+      const deletedClientGroupsResult = await tx.clientGroup.deleteMany({
+        where: { projectId: projectId }
+      });
+
+      // Step 5: Delete all project-client relationships for this project
+      const projectClientResult = await tx.projectClient.deleteMany({
+        where: { projectId: projectId }
+      });
+
+      // Step 6: Delete clients that were only in this project (only if we have valid IDs)
+      let deletedClientsResult = { count: 0 };
+      if (clientIdsToCompletelyDelete.length > 0) {
+        console.log('Deleting clients with IDs:', clientIdsToCompletelyDelete);
+        
+        deletedClientsResult = await tx.client.deleteMany({
+          where: {
+            id: {
+              in: clientIdsToCompletelyDelete
+            }
+          }
+        });
+      }
+
+      return {
+        deletedAssignmentsResult,
+        deletedGroupClientsResult,
+        deletedClientGroupsResult,
+        projectClientResult,
+        deletedClientsResult
+      };
+    });
+
+    // Step 7: Log the action (outside the transaction)
     await prisma.activityLog.create({
       data: {
         userId: req.user.userId,
         projectId: projectId,
         action: 'cleared_project_clients',
         details: {
-          removedFromProject: projectClientResult.count,
-          completelyDeleted: deletedClientsResult.count,
+          removedFromProject: result.projectClientResult.count,
+          completelyDeleted: result.deletedClientsResult.count,
+          deletedClientGroups: result.deletedClientGroupsResult.count,
+          deletedGroupClients: result.deletedGroupClientsResult.count,
+          deletedAssignments: result.deletedAssignmentsResult.count,
           clientIdsDeleted: clientIdsToCompletelyDelete
         }
       }
@@ -1249,9 +1302,12 @@ app.delete('/api/projects/:id/clients', authenticateToken, checkProjectAccess, a
 
     res.json({
       success: true,
-      message: `Cleared ${projectClientResult.count} clients from project. ${deletedClientsResult.count} clients were completely deleted as they were only in this project.`,
-      removedFromProject: projectClientResult.count,
-      completelyDeleted: deletedClientsResult.count
+      message: `Cleared ${result.projectClientResult.count} clients from project. ${result.deletedClientsResult.count} clients were completely deleted as they were only in this project. Also removed ${result.deletedClientGroupsResult.count} client groups, ${result.deletedGroupClientsResult.count} group memberships, and ${result.deletedAssignmentsResult.count} assignments.`,
+      removedFromProject: result.projectClientResult.count,
+      completelyDeleted: result.deletedClientsResult.count,
+      deletedClientGroups: result.deletedClientGroupsResult.count,
+      deletedGroupClients: result.deletedGroupClientsResult.count,
+      deletedAssignments: result.deletedAssignmentsResult.count
     });
   } catch (error) {
     console.error('Error clearing project clients:', error);
@@ -1262,6 +1318,7 @@ app.delete('/api/projects/:id/clients', authenticateToken, checkProjectAccess, a
     });
   }
 });
+
 
 app.put('/api/clients/:id', authenticateToken, async (req, res) => {
   try {

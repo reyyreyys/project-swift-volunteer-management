@@ -45,8 +45,10 @@ const ClientCSVImporter = ({ projectId, onComplete, onCancel }) => {
         try {
           const token = localStorage.getItem('token');
           
-          const response = await axios.post(`/projects/${projectId}/clients/import`, {
-            clients: results.data
+          // Updated API endpoint and request structure
+          const response = await axios.post('/clients/import-csv', {
+            clients: results.data,
+            projectId: projectId // Include projectId in the request body
           }, {
             headers: { 
               'Authorization': `Bearer ${token}`,
@@ -115,7 +117,9 @@ const ClientCSVImporter = ({ projectId, onComplete, onCancel }) => {
               </button>
             </div>
             <p className="text-xs text-gray-600">
-              Download the template to see the required format for importing clients.
+              Download the template to see the required format for importing clients. 
+              <br />
+              <span className="font-medium">Required columns:</span> SRC #, Name, Gender, Race, Language Spoken, Full Address, Location
             </p>
           </div>
 
@@ -175,10 +179,15 @@ const ClientCSVImporter = ({ projectId, onComplete, onCancel }) => {
                 ) : (
                   <>
                     <Upload className="h-4 w-4" />
-                    Import Clients
+                    Import Clients to Project
                   </>
                 )}
               </button>
+              {projectId && (
+                <p className="text-xs text-gray-500 mt-2 text-center">
+                  Clients will be imported to the database and added to the current project.
+                </p>
+              )}
             </div>
           )}
 
@@ -186,7 +195,7 @@ const ClientCSVImporter = ({ projectId, onComplete, onCancel }) => {
           {importing && (
             <div className="mb-6 flex items-center gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
-              <span className="text-sm text-blue-800 font-medium">Processing CSV file...</span>
+              <span className="text-sm text-blue-800 font-medium">Processing CSV file and adding to project...</span>
             </div>
           )}
 
@@ -212,12 +221,12 @@ const ClientCSVImporter = ({ projectId, onComplete, onCancel }) => {
                   
                   {result.success ? (
                     <div className="space-y-1 text-sm text-green-700">
-                      <p>Successfully imported <span className="font-medium">{result.imported || result.clientsImported || 0}</span> clients</p>
-                      {result.errors > 0 && (
-                        <p><span className="font-medium">{result.errors}</span> errors occurred</p>
+                      <p>Successfully imported <span className="font-medium">{result.imported}</span> clients to the database</p>
+                      {projectId && (
+                        <p>All clients have been added to the current project</p>
                       )}
-                      {result.duplicates > 0 && (
-                        <p><span className="font-medium">{result.duplicates}</span> duplicates skipped</p>
+                      {result.errors > 0 && (
+                        <p><span className="font-medium">{result.errors}</span> errors occurred during import</p>
                       )}
                     </div>
                   ) : (
@@ -233,8 +242,26 @@ const ClientCSVImporter = ({ projectId, onComplete, onCancel }) => {
                         <div className="space-y-2">
                           {result.errorDetails.map((error, index) => (
                             <div key={index} className="text-xs text-red-600 border-b border-red-200 pb-1 last:border-b-0">
-                              <span className="font-medium">Row {error.row || index + 1}:</span>{' '}
-                              {error.error || error.message}
+                              <span className="font-medium">{error.client}:</span>{' '}
+                              {error.error}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </details>
+                  )}
+
+                  {/* Show imported clients if available */}
+                  {result.success && result.clients && result.clients.length > 0 && (
+                    <details className="mt-4">
+                      <summary className="cursor-pointer font-medium text-green-800 hover:text-green-900 text-sm">
+                        View Imported Clients ({result.clients.length})
+                      </summary>
+                      <div className="mt-2 p-3 bg-white bg-opacity-50 rounded border max-h-48 overflow-y-auto">
+                        <div className="space-y-1">
+                          {result.clients.map((client, index) => (
+                            <div key={index} className="text-xs text-green-600">
+                              <span className="font-medium">{client.srcId}</span> - {client.name}
                             </div>
                           ))}
                         </div>
