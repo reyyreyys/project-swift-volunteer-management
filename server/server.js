@@ -79,10 +79,72 @@ const checkProjectAccess = async (req, res, next) => {
   }
 };
 
+// Location normalization function - UPDATED VERSION
+function normalizeLocation(location) {
+  if (!location) return 'Unknown';
+  
+  const normalized = location.toLowerCase().trim();
+  
+  // Standardize directional variations
+  const locationMappings = {
+    // North variations
+    'northeast': 'North',     // Changed to capitalized
+    'north-east': 'North',    // Changed to capitalized  
+    'north east': 'North',    // Changed to capitalized
+    'ne': 'North',           // Changed to capitalized
+    'north': 'North',        // Added this line to handle existing "north"
+    
+    // South variations  
+    'southeast': 'South',
+    'south-east': 'South',
+    'south east': 'South',
+    'se': 'South',
+    'southwest': 'South',
+    'south-west': 'South', 
+    'south west': 'South',
+    'sw': 'South',
+    'south': 'South',        // Added this line
+    
+    // East variations
+    'east': 'East',
+    'eastern': 'East',
+    
+    // West variations
+    'west': 'West',
+    'western': 'West',
+    
+    // Central variations
+    'central': 'Central',
+    'centre': 'Central',
+    'center': 'Central',
+    'cbd': 'Central',
+    'city': 'Central'
+  };
+  
+  // Check for exact matches first
+  if (locationMappings[normalized]) {
+    return locationMappings[normalized];
+  }
+  
+  // Then check for partial matches
+  for (const [variation, standard] of Object.entries(locationMappings)) {
+    if (normalized.includes(variation)) {
+      return standard;
+    }
+  }
+  
+  // Return capitalized version if no mapping found
+  return location.charAt(0).toUpperCase() + location.slice(1).toLowerCase();
+}
+
+
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
+
+
 
 // ================================
 // AUTH ROUTES
@@ -1062,6 +1124,7 @@ app.post('/api/clients/bulk', authenticateToken, async (req, res) => {
 
 // Import clients from CSV
 // Import clients from CSV
+// Import clients from CSV
 app.post('/api/clients/import-csv', authenticateToken, async (req, res) => {
   try {
     const { clients, projectId } = req.body;
@@ -1072,13 +1135,13 @@ app.post('/api/clients/import-csv', authenticateToken, async (req, res) => {
 
     // Process the CSV data with proper field mapping
     const processedClients = clients.map(c => ({
-      srcId: c['SRC #'] || c.srcId || '',
-      name: c['Name'] || c.name || '',
+      srcId: c['SRC #'] || c.srcId,
+      name: c['Name'] || c.name,
       gender: c['Gender'] || c.gender || null,
       race: c['Race'] || c.race || null,
-      languages: c['Language Spoken'] || c.languages || '',
-      address: c['Full Address'] || c.address || '',
-      location: c['Location'] || c.location || '',
+      languages: c['Language Spoken'] || c.languages,
+      address: c['Full Address'] || c.address,
+      location: normalizeLocation(c['Location'] || c.location), // ← ADD THIS LINE
       isPublic: true,
       createdById: req.user.userId
     }));
@@ -1090,9 +1153,7 @@ app.post('/api/clients/import-csv', authenticateToken, async (req, res) => {
     for (const clientData of processedClients) {
       try {
         // Skip empty rows
-        if (!clientData.srcId || !clientData.name) {
-          continue;
-        }
+        if (!clientData.srcId && !clientData.name) continue;
         
         const client = await prisma.client.create({
           data: clientData
@@ -1100,7 +1161,7 @@ app.post('/api/clients/import-csv', authenticateToken, async (req, res) => {
         createdClients.push(client);
       } catch (error) {
         errors.push({
-          client: `${clientData.name} (${clientData.srcId})`,
+          client: clientData.name || clientData.srcId,
           error: error.message
         });
       }
@@ -1113,7 +1174,7 @@ app.post('/api/clients/import-csv', authenticateToken, async (req, res) => {
         clientId: c.id,
         priority: index + 1
       }));
-
+      
       await prisma.projectClient.createMany({
         data: projectClientData,
         skipDuplicates: true
@@ -1126,7 +1187,7 @@ app.post('/api/clients/import-csv', authenticateToken, async (req, res) => {
         data: {
           userId: req.user.userId,
           projectId: projectId,
-          action: 'imported_clients',
+          action: 'importedclients',
           details: {
             count: createdClients.length,
             errors: errors.length
@@ -1147,11 +1208,13 @@ app.post('/api/clients/import-csv', authenticateToken, async (req, res) => {
         srcId: c.srcId
       }))
     });
+
   } catch (error) {
     console.error('CSV import error:', error);
     res.status(500).json({ error: 'Failed to import clients' });
   }
 });
+
 
 app.get('/api/clients', authenticateToken, async (req, res) => {
   try {
@@ -2824,14 +2887,13 @@ app.post('/api/projects/:id/clients/auto-group-enhanced', authenticateToken, che
 });
 
 
-
 // Create custom client groups
 app.post('/api/projects/:id/client-groups', authenticateToken, checkProjectAccess, async (req, res) => {
   try {
     if (req.userPermission === 'VIEW') {
       return res.status(403).json({ error: 'Insufficient permissions' });
     }
-
+    
     const { groups } = req.body;
     const projectId = req.params.id;
 
@@ -2844,34 +2906,38 @@ app.post('/api/projects/:id/client-groups', authenticateToken, checkProjectAcces
     // Use transaction to ensure all groups are created successfully
     await prisma.$transaction(async (tx) => {
       for (const groupData of groups) {
-        const { 
-          name, 
-          location, 
-          groupNumber = 1,
-          mandatoryClients = [], 
-          optionalClients = [],
-          maxMandatory = 3,
-          maxOptional = 2
-        } = groupData;
-
+        const { name, location, mandatoryClients = [], optionalClients = [] } = groupData;
+        
         if (!name || !location) {
           throw new Error('Group name and location are required');
         }
 
-        // Create the group
+        // FIXED: Calculate the next group number for this project/location combination
+        const existingGroups = await tx.clientGroup.findMany({
+          where: { 
+            projectId: projectId, 
+            location: location 
+          },
+          select: { groupNumber: true },
+          orderBy: { groupNumber: 'desc' }
+        });
+        
+        const nextGroupNumber = existingGroups.length > 0 ? existingGroups[0].groupNumber + 1 : 1;
+
+        // Create the group with the calculated group number
         const group = await tx.clientGroup.create({
           data: {
             name,
             location,
-            groupNumber,
+            groupNumber: nextGroupNumber, // Use calculated number instead of hardcoded 1
             projectId,
-            maxMandatory,
-            maxOptional
+            maxMandatory: 3,
+            maxOptional: 2
           }
         });
 
         // Add mandatory clients
-        for (let i = 0; i < mandatoryClients.length && i < maxMandatory; i++) {
+        for (let i = 0; i < mandatoryClients.length && i < 3; i++) {
           await tx.groupClient.create({
             data: {
               clientId: mandatoryClients[i].id,
@@ -2882,8 +2948,8 @@ app.post('/api/projects/:id/client-groups', authenticateToken, checkProjectAcces
           });
         }
 
-        // Add optional clients
-        for (let i = 0; i < optionalClients.length && i < maxOptional; i++) {
+        // Add optional clients  
+        for (let i = 0; i < optionalClients.length && i < 2; i++) {
           await tx.groupClient.create({
             data: {
               clientId: optionalClients[i].id,
@@ -2903,10 +2969,8 @@ app.post('/api/projects/:id/client-groups', authenticateToken, checkProjectAcces
       data: {
         userId: req.user.userId,
         projectId: projectId,
-        action: 'created_client_groups',
-        details: {
-          groupsCreated: createdGroups.length
-        }
+        action: 'createdclientgroups',
+        details: { groupsCreated: createdGroups.length }
       }
     });
 
@@ -2918,11 +2982,10 @@ app.post('/api/projects/:id/client-groups', authenticateToken, checkProjectAcces
 
   } catch (error) {
     console.error('Create client groups error:', error);
-    res.status(500).json({ 
-      error: error.message || 'Failed to create client groups' 
-    });
+    res.status(500).json({ error: error.message || 'Failed to create client groups' });
   }
 });
+
 
 // Update a client group
 app.put('/api/projects/:id/client-groups/:groupId', authenticateToken, checkProjectAccess, async (req, res) => {
