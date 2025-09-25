@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import axios from 'axios';
+import apiClient from '../apiClient'; // Changed from 'axios' to 'apiClient'
 import { FolderOpen, Users, UserCheck, Plus, Activity } from 'lucide-react';
 
 const Dashboard = () => {
@@ -19,9 +19,9 @@ const Dashboard = () => {
   const loadDashboardData = async () => {
     try {
       const [projectsRes, volunteersRes, clientsRes] = await Promise.all([
-        axios.get('/projects'),
-        axios.get('/volunteers'),
-        axios.get('/clients')
+        apiClient.get('/projects'), // Changed from axios to apiClient
+        apiClient.get('/volunteers'), // Changed from axios to apiClient
+        apiClient.get('/clients') // Changed from axios to apiClient
       ]);
 
       setStats({
