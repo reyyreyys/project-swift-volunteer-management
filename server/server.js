@@ -591,7 +591,8 @@ app.post('/api/volunteers/import-csv', authenticateToken, async (req, res) => {
           availableDays: volunteerData.availableDays || [],
           availableTime: volunteerData.availableTime || [],
 
-          hasExperience: false,
+          // Preserve existing hasExperience on update; default to false on new
+          hasExperience: undefined,  
           totalProjects: 0,
           experienceSummary: volunteerData.experienceSummary || null,
 
@@ -612,31 +613,37 @@ app.post('/api/volunteers/import-csv', authenticateToken, async (req, res) => {
         };
 
         await prisma.$transaction(async (tx) => {
-          // Find existing volunteer by first and last name (case insensitive)
+          // Find existing volunteer by first and last name (case-insensitive)
           const existingVolunteer = await tx.volunteer.findFirst({
             where: {
               AND: [
                 { firstName: { equals: cleanData.firstName, mode: 'insensitive' } },
                 { lastName: { equals: cleanData.lastName, mode: 'insensitive' } }
-              ],
+              ]
             }
           });
 
           let volunteer;
-          let isExisting = false;
-
           if (existingVolunteer) {
+            // Preserve existing hasExperience
+            if (cleanData.hasExperience === undefined) {
+              cleanData.hasExperience = existingVolunteer.hasExperience;
+            }
+
             volunteer = await tx.volunteer.update({
               where: { id: existingVolunteer.id },
               data: {
-                // Update fields as needed
                 ...cleanData,
-                createdById: existingVolunteer.createdById // Don't overwrite whoever created original record
+                createdById: existingVolunteer.createdById // don't overwrite who created originally
               }
             });
-            isExisting = true;
             updatedVolunteers++;
           } else {
+            // New volunteer, explicitly set hasExperience or default false
+            if (cleanData.hasExperience === undefined) {
+              cleanData.hasExperience = false;
+            }
+
             volunteer = await tx.volunteer.create({
               data: cleanData
             });
@@ -647,8 +654,8 @@ app.post('/api/volunteers/import-csv', authenticateToken, async (req, res) => {
           await tx.projectVolunteer.upsert({
             where: {
               projectId_volunteerId: {
-                projectId: projectId,
-                volunteerId: volunteer.id
+                projectId,
+                volunteerId: volunteer.id,
               }
             },
             update: {
@@ -656,7 +663,7 @@ app.post('/api/volunteers/import-csv', authenticateToken, async (req, res) => {
               addedAt: new Date()
             },
             create: {
-              projectId: projectId,
+              projectId,
               volunteerId: volunteer.id,
               isSelected: false,
               isWaitlist: false,
@@ -667,9 +674,7 @@ app.post('/api/volunteers/import-csv', authenticateToken, async (req, res) => {
 
           linkedToProject++;
         });
-
       } catch (error) {
-        console.error(`Error processing volunteer ${volunteerData.firstName} ${volunteerData.lastName}:`, error);
         errors.push({
           volunteer: `${volunteerData.firstName || 'Unknown'} ${volunteerData.lastName || 'Volunteer'}`,
           error: error.message
@@ -677,10 +682,8 @@ app.post('/api/volunteers/import-csv', authenticateToken, async (req, res) => {
       }
     }
 
-    // Recalculate experience outside import loop and transaction if needed...
+    // Optionally run your experience recalculation here if needed again...
 
-    // Log activity...
-    
     res.status(201).json({
       success: errors.length === 0,
       message: `Processed ${createdVolunteers + updatedVolunteers} volunteers, linked ${linkedToProject} to project.`,
@@ -692,11 +695,10 @@ app.post('/api/volunteers/import-csv', authenticateToken, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('CSV import error:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to import volunteers', 
-      details: error.message 
+    res.status(500).json({
+      success: false,
+      error: 'Failed to import volunteers',
+      details: error.message
     });
   }
 });
