@@ -2515,65 +2515,32 @@ app.delete('/api/projects/:id/client-groups/all', authenticateToken, checkProjec
 
 
 // Get group statistics
-app.get('/api/projects/:id/client-groups/stats', authenticateToken, checkProjectAccess, async (req, res) => {
+app.get('/api/projects/:id/client-groups', authenticateToken, checkProjectAccess, async (req, res) => {
   try {
     const groups = await prisma.clientGroup.findMany({
       where: { projectId: req.params.id },
       include: {
         groupClients: {
-          include: {
-            client: true
-          }
+          select: {
+            id: true,
+            clientId: true,
+            priority: true,
+            type: true, // ← This is the field we need (not isOptional)
+            client: true // Include the actual client data
+          },
+          orderBy: { priority: 'asc' }
         }
-      }
+      },
+      orderBy: [
+        { location: 'asc' },
+        { groupNumber: 'asc' }
+      ]
     });
 
-    const stats = {
-      totalGroups: groups.length,
-      totalClients: 0,
-      mandatoryClients: 0,
-      optionalClients: 0,
-      locations: new Set(),
-      averageGroupSize: 0,
-      locationBreakdown: {}
-    };
-
-    groups.forEach(group => {
-      stats.locations.add(group.location);
-      
-      if (!stats.locationBreakdown[group.location]) {
-        stats.locationBreakdown[group.location] = {
-          groups: 0,
-          clients: 0,
-          mandatory: 0,
-          optional: 0
-        };
-      }
-      
-      stats.locationBreakdown[group.location].groups++;
-      
-      group.groupClients.forEach(gc => {
-        stats.totalClients++;
-        stats.locationBreakdown[group.location].clients++;
-        
-        if (gc.type === 'MANDATORY') {
-          stats.mandatoryClients++;
-          stats.locationBreakdown[group.location].mandatory++;
-        } else {
-          stats.optionalClients++;
-          stats.locationBreakdown[group.location].optional++;
-        }
-      });
-    });
-
-    stats.locations = Array.from(stats.locations);
-    stats.averageGroupSize = stats.totalGroups > 0 ? (stats.totalClients / stats.totalGroups).toFixed(1) : 0;
-
-    res.json(stats);
-
+    res.json(groups);
   } catch (error) {
-    console.error('Get group statistics error:', error);
-    res.status(500).json({ error: 'Failed to get group statistics' });
+    console.error('Get client groups error:', error);
+    res.status(500).json({ error: 'Failed to get client groups' });
   }
 });
 

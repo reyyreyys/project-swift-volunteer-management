@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { AlertTriangle, CheckCircle, Users, MapPin, Phone, Globe, Target, Trash2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Users, MapPin, Phone, Globe, Target, Star, Info } from 'lucide-react';
 import apiClient from '../../api/axiosClient';
 
 const FinalGroupingsTab = ({ projectId, refreshKey = 0 }) => {
@@ -13,10 +13,6 @@ const FinalGroupingsTab = ({ projectId, refreshKey = 0 }) => {
   const [showFinaliseModal, setShowFinaliseModal] = useState(false);
   const [finalising, setFinalising] = useState(false);
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    loadData();
-  }, [projectId, refreshKey]);
 
   const loadData = async () => {
     try {
@@ -48,6 +44,10 @@ const FinalGroupingsTab = ({ projectId, refreshKey = 0 }) => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadData();
+  }, [projectId, refreshKey]);
 
   // Get waitlisted volunteers who attended training (available for replacement)
   const availableReplacements = useMemo(() => {
@@ -142,11 +142,17 @@ const FinalGroupingsTab = ({ projectId, refreshKey = 0 }) => {
         
         // If we haven't processed this pair-group combination yet
         if (!groupedAssignments.has(groupKey)) {
-          // Get all clients in this group
-          const assignedClients = clientGroup.groupClients?.map(gc => {
-            const client = clients.find(c => c.client?.id === gc.clientId || c.id === gc.clientId);
-            return client?.client || client;
-          }).filter(Boolean) || [];
+          // Get all clients in this group with their assignment details
+// Get all clients in this group with their assignment details
+      const assignedClients = clientGroup.groupClients?.map(gc => {
+        const client = clients.find(c => c.client?.id === gc.clientId || c.id === gc.clientId);
+        const clientData = client?.client || client;
+        
+        return {
+          ...clientData,
+          isOptional: gc.type === 'OPTIONAL' // ← Change this line: use gc.type instead of gc.isOptional
+        };
+      }).filter(Boolean) || [];
 
           groupedAssignments.set(groupKey, {
             id: groupKey, // Use a composite key as ID
@@ -224,6 +230,26 @@ const FinalGroupingsTab = ({ projectId, refreshKey = 0 }) => {
               Finalise Project
             </button>
           )}
+        </div>
+      </div>
+
+      {/* Legend for Client Indicators */}
+      <div className="bg-blue-50 rounded-lg border border-blue-200 p-4">
+        <div className="flex items-start space-x-4">
+          <Info className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+          <div>
+            <h4 className="text-sm font-medium text-blue-900 mb-2">Client Assignment Legend</h4>
+            <div className="flex flex-wrap gap-4 text-sm">
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                <span className="text-blue-800">Required Client - Must be visited</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Star className="w-3 h-3 text-orange-500" />
+                <span className="text-blue-800">Optional Client - Visit if time permits</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -381,7 +407,7 @@ const FinalGroupingsTab = ({ projectId, refreshKey = 0 }) => {
         <div className="p-6 border-b border-gray-200">
           <h4 className="text-lg font-semibold text-gray-900 mb-2">Final Assignments</h4>
           <p className="text-sm text-gray-600">
-            Final volunteer pairs and their assigned client groups. Review before finalising the project.
+            Final volunteer pairs and their assigned client groups. Optional clients are marked with a <Star className="w-3 h-3 text-orange-500 inline" /> star icon.
           </p>
         </div>
 
@@ -449,15 +475,29 @@ const FinalGroupingsTab = ({ projectId, refreshKey = 0 }) => {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>
                         <div className="font-medium text-gray-900">{assignment.clientGroup?.name || 'Unnamed Group'}</div>
-                        <div className="text-sm text-gray-500">({assignment.clients?.length || 0} clients)</div>
+                        <div className="text-sm text-gray-500">
+                          ({assignment.clients?.filter(c => !c.isOptional).length || 0} required, {assignment.clients?.filter(c => c.isOptional).length || 0} optional)
+                        </div>
                       </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="space-y-3">
                         {assignment.clients?.map((client, clientIndex) => (
-                          <div key={client?.id || clientIndex} className="bg-gray-50 rounded-lg p-3 border">
-                            <div className="font-medium text-gray-900 mb-2">
-                              #{client?.srcId || client?.id} {client?.name}
+                          <div key={client?.id || clientIndex} className={`rounded-lg p-3 border ${
+                            client.isOptional ? 'bg-orange-50 border-orange-200' : 'bg-gray-50 border-gray-200'
+                          }`}>
+                            <div className="font-medium text-gray-900 mb-2 flex items-center space-x-2">
+                              {client.isOptional ? (
+                                <Star className="w-4 h-4 text-orange-500 flex-shrink-0" />
+                              ) : (
+                                <div className="w-3 h-3 bg-green-500 rounded-full flex-shrink-0"></div>
+                              )}
+                              <span>#{client?.srcId || client?.id} {client?.name}</span>
+                              {client.isOptional && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800">
+                                  Optional
+                                </span>
+                              )}
                             </div>
                             <div className="space-y-1 text-sm">
                               <div className="flex items-center space-x-2 text-gray-600">
