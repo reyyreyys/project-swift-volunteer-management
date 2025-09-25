@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Users, MapPin, CheckCircle, AlertCircle, Save, RefreshCw, Trash2 } from 'lucide-react';
 
-const AssignmentsTab = ({ projectId, refreshKey, onRefresh }) => {
+const AssignmentsTab = ({ projectId, refreshKey, onAssignmentsUpdate }) => {
   const [pairs, setPairs] = useState([]);
   const [clientGroups, setClientGroups] = useState([]);
   const [assignments, setAssignments] = useState([]);
@@ -91,7 +91,7 @@ const AssignmentsTab = ({ projectId, refreshKey, onRefresh }) => {
 
       // Reload data
       await loadData();
-      onRefresh();
+      onAssignmentsUpdate();
       
       alert(`Successfully removed assignments for ${group.name} (${assignmentIds.length} assignments removed)`);
     } catch (error) {
@@ -175,7 +175,7 @@ const AssignmentsTab = ({ projectId, refreshKey, onRefresh }) => {
 
       setStagedAssignments({});
       await loadData();
-      onRefresh();
+      onAssignmentsUpdate();
       
       alert(`Successfully created assignments for ${Object.keys(stagedAssignments).length} groups (${assignmentsToCreate.length} total client assignments)!`);
     } catch (error) {

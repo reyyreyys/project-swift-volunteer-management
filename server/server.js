@@ -626,12 +626,13 @@ app.post('/api/volunteers/import-csv', authenticateToken, async (req, res) => {
           // Check if volunteer exists by email or contact number
           const existingVolunteer = await tx.volunteer.findFirst({
             where: {
-              OR: [
-                ...(cleanData.email ? [{ email: cleanData.email }] : []),
-                ...(cleanData.contactNumber ? [{ contactNumber: cleanData.contactNumber }] : [])
+              AND: [
+                { firstName: cleanData.firstName },  // match first name exactly
+                { lastName: cleanData.lastName }     // match last name exactly
               ]
             }
           });
+
 
           if (existingVolunteer) {
             // Update existing volunteer with latest data

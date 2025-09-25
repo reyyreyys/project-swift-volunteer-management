@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import axios from 'axios';
+import apiClient from '../../api/axiosClient'; // Changed from 'axios' to 'apiClient'
 import {
   ArrowLeft,
   Users,
@@ -327,7 +327,7 @@ const ProjectDetail = () => {
 
   const loadProject = async () => {
     try {
-      const response = await axios.get(`/projects/${id}`);
+      const response = await apiClient.get(`/projects/${id}`); // Changed from axios to apiClient
       setProject(response.data);
     } catch (error) {
       console.error('Error loading project:', error);
@@ -339,13 +339,12 @@ const ProjectDetail = () => {
   const loadProjectData = async () => {
     try {
       const [volunteersRes, clientsRes, pairsRes, groupsRes, assignmentsRes] = await Promise.all([
-        axios.get(`/projects/${id}/volunteers-detailed`),
-        axios.get(`/projects/${id}/clients`),
-        axios.get(`/projects/${id}/pairs`),
-        axios.get(`/projects/${id}/client-groups`),
-        axios.get(`/projects/${id}/assignments`)
+        apiClient.get(`/projects/${id}/volunteers-detailed`), // Changed from axios to apiClient
+        apiClient.get(`/projects/${id}/clients`), // Changed from axios to apiClient
+        apiClient.get(`/projects/${id}/pairs`), // Changed from axios to apiClient
+        apiClient.get(`/projects/${id}/client-groups`), // Changed from axios to apiClient
+        apiClient.get(`/projects/${id}/assignments`) // Changed from axios to apiClient
       ]);
-
 
       setProjectVolunteers(volunteersRes.data || []);
       setProjectClients(clientsRes.data || []);
@@ -375,7 +374,7 @@ const ProjectDetail = () => {
   const handleClearVolunteers = async () => {
     setClearingVolunteers(true);
     try {
-      const response = await axios.delete(`/projects/${id}/volunteers`);
+      const response = await apiClient.delete(`/projects/${id}/volunteers`); // Changed from axios to apiClient
       if (response.data.success) {
         const { removedFromProject, completelyDeleted } = response.data;
         let message = `Successfully removed ${removedFromProject} volunteers from project.`;

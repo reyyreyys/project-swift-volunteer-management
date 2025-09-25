@@ -28,7 +28,7 @@ const TrainingDayTab = ({ projectId, refreshKey = 0 }) => {
       
       // Load volunteer pairs for this project
       try {
-        const pairsRes = await apiClient.get(`/projects/${projectId}/volunteer-pairs`);
+        const pairsRes = await apiClient.get(`/projects/${projectId}/pairs`);
         setVolunteerPairs(pairsRes.data || []);
       } catch (error) {
         console.warn('Could not load volunteer pairs:', error);
@@ -62,13 +62,14 @@ const TrainingDayTab = ({ projectId, refreshKey = 0 }) => {
   // Helper function to find volunteer pairs
   const getVolunteerPairInfo = (volunteerId) => {
     const pair = volunteerPairs.find(pair => 
-      pair.volunteer1Id === volunteerId || pair.volunteer2Id === volunteerId
+      (pair.volunteer1 && pair.volunteer1.id === volunteerId) || 
+      (pair.volunteer2 && pair.volunteer2.id === volunteerId)
     );
     
     if (!pair) return null;
     
     // Find the partner
-    const partnerId = pair.volunteer1Id === volunteerId ? pair.volunteer2Id : pair.volunteer1Id;
+    const partnerId = pair.volunteer1?.id === volunteerId ? pair.volunteer2?.id : pair.volunteer1?.id;
     const partner = volunteers.find(pv => pv.volunteer.id === partnerId);
     
     return {
@@ -84,7 +85,6 @@ const TrainingDayTab = ({ projectId, refreshKey = 0 }) => {
     const selected = volunteers.filter(pv => pv.status === 'SELECTED');
     const waitlisted = volunteers.filter(pv => pv.status === 'WAITLISTED');
     
-    // Show ALL waitlisted volunteers instead of limiting to 5
     return [...selected, ...waitlisted];
   }, [volunteers]);
 
@@ -92,11 +92,9 @@ const TrainingDayTab = ({ projectId, refreshKey = 0 }) => {
   const volunteersNeedingTraining = useMemo(() => {
     const filtered = trainingCandidates.filter(pv => {
       if (!pv.volunteer.hasExperience) {
-        // Selected volunteers always need training if no experience
         if (pv.status === 'SELECTED') {
           return true;
         }
-        // Waitlisted volunteers only need training if manually selected
         if (pv.status === 'WAITLISTED') {
           return waitlistedSelection[pv.id] === true;
         }
@@ -104,46 +102,62 @@ const TrainingDayTab = ({ projectId, refreshKey = 0 }) => {
       return false;
     });
 
-    // Group volunteers by pairs and sort to show pairs together
-    const pairedVolunteers = [];
-    const unpairedVolunteers = [];
-    const processedVolunteerIds = new Set();
-
-    filtered.forEach(pv => {
-      if (processedVolunteerIds.has(pv.volunteer.id)) return;
-
-      const pairInfo = getVolunteerPairInfo(pv.volunteer.id);
-      
-      if (pairInfo) {
-        // Find the partner in the filtered list
-        const partner = filtered.find(p => p.volunteer.id === pairInfo.partnerId);
-        
-        if (partner && !processedVolunteerIds.has(partner.volunteer.id)) {
-          // Add both volunteers in the pair together
-          pairedVolunteers.push(pv, partner);
-          processedVolunteerIds.add(pv.volunteer.id);
-          processedVolunteerIds.add(partner.volunteer.id);
-        } else if (!processedVolunteerIds.has(pv.volunteer.id)) {
-          // Partner not in training list, add volunteer alone
-          unpairedVolunteers.push(pv);
-          processedVolunteerIds.add(pv.volunteer.id);
-        }
-      } else {
-        // No pair, add to unpaired list
-        unpairedVolunteers.push(pv);
-        processedVolunteerIds.add(pv.volunteer.id);
+    // Create a map of volunteer pairs for easy lookup (same as overview)
+    const pairMap = {};
+    volunteerPairs.forEach(pair => {
+      if (pair.volunteer1 && pair.volunteer2) {
+        pairMap[pair.volunteer1.id] = { 
+          partnerId: pair.volunteer2.id, 
+          pairId: pair.id
+        };
+        pairMap[pair.volunteer2.id] = { 
+          partnerId: pair.volunteer1.id, 
+          pairId: pair.id
+        };
       }
     });
 
-    // Sort unpaired volunteers alphabetically
-    unpairedVolunteers.sort((a, b) => 
+    // Group volunteers by pairs and singles (same logic as overview)
+    const pairedVolunteers = [];
+    const singleVolunteers = [];
+    const processedVolunteers = new Set();
+
+    filtered.forEach(projectVolunteer => {
+      const volunteerId = projectVolunteer.volunteer.id;
+      
+      if (processedVolunteers.has(volunteerId)) {
+        return;
+      }
+      
+      const pairInfo = pairMap[volunteerId];
+      
+      if (pairInfo) {
+        const partnerVolunteer = filtered.find(pv => 
+          pv.volunteer.id === pairInfo.partnerId
+        );
+        
+        if (partnerVolunteer) {
+          pairedVolunteers.push(projectVolunteer, partnerVolunteer);
+          processedVolunteers.add(volunteerId);
+          processedVolunteers.add(pairInfo.partnerId);
+        } else {
+          singleVolunteers.push(projectVolunteer);
+          processedVolunteers.add(volunteerId);
+        }
+      } else {
+        singleVolunteers.push(projectVolunteer);
+        processedVolunteers.add(volunteerId);
+      }
+    });
+
+    // Sort single volunteers alphabetically
+    singleVolunteers.sort((a, b) => 
       `${a.volunteer.firstName} ${a.volunteer.lastName}`.localeCompare(
         `${b.volunteer.firstName} ${b.volunteer.lastName}`
       )
     );
 
-    // Return pairs first, then unpaired volunteers
-    return [...pairedVolunteers, ...unpairedVolunteers];
+    return [...pairedVolunteers, ...singleVolunteers];
   }, [trainingCandidates, waitlistedSelection, volunteerPairs, volunteers]);
 
   const handleAttendanceChange = async (projectVolunteerId, attended) => {
@@ -152,14 +166,12 @@ const TrainingDayTab = ({ projectId, refreshKey = 0 }) => {
       [projectVolunteerId]: attended
     }));
 
-    // Save to backend immediately
     try {
       await apiClient.patch(`/projects/${projectId}/volunteers/${projectVolunteerId}/training`, {
         trainingAttended: attended
       });
     } catch (error) {
       console.error('Error saving training attendance:', error);
-      // Revert on error
       setTrainingAttendance(prev => ({
         ...prev,
         [projectVolunteerId]: !attended
@@ -174,14 +186,12 @@ const TrainingDayTab = ({ projectId, refreshKey = 0 }) => {
       [projectVolunteerId]: selected
     }));
 
-    // Save to backend
     try {
       await apiClient.patch(`/projects/${projectId}/volunteers/${projectVolunteerId}/training-selection`, {
         selectedForTraining: selected
       });
     } catch (error) {
       console.error('Error saving waitlisted selection:', error);
-      // Revert on error
       setWaitlistedSelection(prev => ({
         ...prev,
         [projectVolunteerId]: !selected
@@ -206,6 +216,107 @@ const TrainingDayTab = ({ projectId, refreshKey = 0 }) => {
     }
   };
 
+  // Helper function to render a volunteer row (similar to overview)
+  const renderVolunteerRow = (projectVolunteer, index, pairInfo) => {
+    const volunteer = projectVolunteer.volunteer;
+    const hasAttended = trainingAttendance[projectVolunteer.id] || false;
+    
+    return (
+      <tr 
+        key={projectVolunteer.id}
+        className={`border-b border-gray-100 hover:bg-gray-50 ${pairInfo ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''}`}
+      >
+        <td className="px-4 py-3 min-w-[150px]">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">👤</span>
+            <div>
+              <div className="font-medium text-gray-900">
+                {volunteer.firstName} {volunteer.lastName}
+                {volunteer.hasExperience && <span className="ml-1 text-yellow-500">⭐</span>}
+              </div>
+              {projectVolunteer.status === 'WAITLISTED' && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 mt-1">
+                  WAITLISTED
+                </span>
+              )}
+            </div>
+          </div>
+        </td>
+        <td className="px-4 py-3 text-sm text-gray-600">{volunteer.contactNumber || 'N/A'}</td>
+        <td className="px-4 py-3 text-sm text-gray-600 max-w-[150px] truncate">{volunteer.email || 'N/A'}</td>
+        <td className="px-4 py-3">
+          <span className="inline-flex items-center px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded-full">
+            {volunteer.shirtSize || 'N/A'}
+          </span>
+        </td>
+        <td className="px-4 py-3">
+          {pairInfo ? (
+            <div className="text-sm">
+              <div className="font-medium text-gray-900">With: {pairInfo.partnerName}</div>
+            </div>
+          ) : (
+            <span className="text-sm text-gray-400">No pairing</span>
+          )}
+        </td>
+        <td className="px-4 py-3">
+          <span className={`inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full uppercase ${
+            projectVolunteer.status === 'SELECTED' 
+              ? 'bg-green-100 text-green-800' 
+              : 'bg-yellow-100 text-yellow-800'
+          }`}>
+            {projectVolunteer.status}
+          </span>
+        </td>
+        <td className="px-4 py-3">
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              id={`attendance-${projectVolunteer.id}`}
+              checked={hasAttended}
+              onChange={(e) => handleAttendanceChange(projectVolunteer.id, e.target.checked)}
+              className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
+            />
+            <label htmlFor={`attendance-${projectVolunteer.id}`} className="cursor-pointer">
+              {hasAttended ? (
+                <div className="flex items-center text-green-600">
+                  <Check className="w-4 h-4 mr-1" />
+                  <span className="text-sm font-medium">Attended</span>
+                </div>
+              ) : (
+                <div className="flex items-center text-red-600">
+                  <X className="w-4 h-4 mr-1" />
+                  <span className="text-sm font-medium">Not Attended</span>
+                </div>
+              )}
+            </label>
+          </div>
+        </td>
+        <td className="px-4 py-3">
+          <button
+            onClick={() => handleAttendanceChange(projectVolunteer.id, !hasAttended)}
+            className={`inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+              hasAttended 
+                ? 'text-red-700 bg-red-100 hover:bg-red-200 focus:ring-red-500' 
+                : 'text-green-700 bg-green-100 hover:bg-green-200 focus:ring-green-500'
+            }`}
+          >
+            {hasAttended ? (
+              <>
+                <UserX className="w-3 h-3 mr-1" />
+                Mark Absent
+              </>
+            ) : (
+              <>
+                <UserCheck className="w-3 h-3 mr-1" />
+                Mark Present
+              </>
+            )}
+          </button>
+        </td>
+      </tr>
+    );
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-96">
@@ -218,10 +329,8 @@ const TrainingDayTab = ({ projectId, refreshKey = 0 }) => {
   const needTrainingCount = volunteersNeedingTraining.length;
   const attendedCount = Object.values(trainingAttendance).filter(Boolean).length;
   
-  // Get counts for display
   const selectedCount = volunteers.filter(pv => pv.status === 'SELECTED').length;
   const waitlistedCount = volunteers.filter(pv => pv.status === 'WAITLISTED').length;
-  const waitlistedInTraining = Math.min(waitlistedCount, 5);
   const waitlistedSelectedCount = Object.values(waitlistedSelection).filter(Boolean).length;
 
   return (
@@ -267,7 +376,7 @@ const TrainingDayTab = ({ projectId, refreshKey = 0 }) => {
             </h4>
           </div>
           <p className="text-sm text-gray-600">
-            All selected volunteers ({selectedCount}) and first 5 waitlisted volunteers ({waitlistedInTraining}). 
+            All selected volunteers ({selectedCount}) and waitlisted volunteers ({waitlistedCount}). 
             Check which waitlisted volunteers should attend training.
           </p>
         </div>
@@ -408,19 +517,17 @@ const TrainingDayTab = ({ projectId, refreshKey = 0 }) => {
         </div>
       </div>
 
-      {/* Table 2: Training Attendance */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center space-x-2 mb-2">
-            <UserCheck className="w-4 h-4 text-gray-600" />
-            <h4 className="text-lg font-semibold text-gray-900">
-              Training Attendance ({volunteersNeedingTraining.length} must attend)
-            </h4>
+      {/* Table 2: Training Attendance - Using same layout as Overview */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="px-6 py-4 bg-blue-50 border-b border-gray-200">
+          <div className="flex items-center gap-3">
+            <BookOpen className="text-blue-600" />
+            <span className="font-semibold text-gray-900">Training Attendance ({volunteersNeedingTraining.length} must attend)</span>
           </div>
-          <p className="text-sm text-gray-600">
+          <div className="mt-1 text-sm text-gray-600">
             Volunteers who will attend training (paired volunteers shown together). Check the box when they've completed training.
-          </p>
-
+          </div>
+          
           {volunteersNeedingTraining.length > 0 && (
             <div className="mt-4">
               <button 
@@ -436,20 +543,20 @@ const TrainingDayTab = ({ projectId, refreshKey = 0 }) => {
         </div>
         
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Shirt Size</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pairing</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Attended Training</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+          <table className="w-full border-collapse min-w-[1000px]">
+            <thead>
+              <tr className="bg-gray-50">
+                <th className="px-4 py-3 text-left font-semibold text-gray-700 border-b-2 border-gray-200">Name</th>
+                <th className="px-4 py-3 text-left font-semibold text-gray-700 border-b-2 border-gray-200">Contact</th>
+                <th className="px-4 py-3 text-left font-semibold text-gray-700 border-b-2 border-gray-200">Email</th>
+                <th className="px-4 py-3 text-left font-semibold text-gray-700 border-b-2 border-gray-200">Shirt Size</th>
+                <th className="px-4 py-3 text-left font-semibold text-gray-700 border-b-2 border-gray-200">Pairing</th>
+                <th className="px-4 py-3 text-left font-semibold text-gray-700 border-b-2 border-gray-200">Status</th>
+                <th className="px-4 py-3 text-left font-semibold text-gray-700 border-b-2 border-gray-200">Attended Training</th>
+                <th className="px-4 py-3 text-left font-semibold text-gray-700 border-b-2 border-gray-200">Action</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody>
               {volunteersNeedingTraining.length === 0 ? (
                 <tr>
                   <td colSpan="8" className="px-6 py-12 text-center">
@@ -462,129 +569,31 @@ const TrainingDayTab = ({ projectId, refreshKey = 0 }) => {
                 </tr>
               ) : (
                 volunteersNeedingTraining.map((pv, index) => {
-                  const v = pv.volunteer;
-                  const hasAttended = trainingAttendance[pv.id] || false;
-                  const pairInfo = getVolunteerPairInfo(v.id);
-                  const isFirstInPair = pairInfo && (index === 0 || 
-                    !getVolunteerPairInfo(volunteersNeedingTraining[index - 1]?.volunteer.id) ||
-                    getVolunteerPairInfo(volunteersNeedingTraining[index - 1]?.volunteer.id)?.pairId !== pairInfo.pairId
-                  );
+                  const pairInfo = getVolunteerPairInfo(pv.volunteer.id);
+                  
+                  // Group paired volunteers together (same logic as overview)
+                  let shouldAddSeparator = false;
+                  if (index < volunteersNeedingTraining.length - 1) {
+                    const currentPairInfo = getVolunteerPairInfo(pv.volunteer.id);
+                    const nextPairInfo = getVolunteerPairInfo(volunteersNeedingTraining[index + 1].volunteer.id);
+                    
+                    // Add separator if current has pair but next doesn't, or if they have different pairs
+                    shouldAddSeparator = currentPairInfo && (
+                      !nextPairInfo || 
+                      (nextPairInfo && currentPairInfo.pairId !== nextPairInfo.pairId)
+                    );
+                  }
                   
                   return (
-                    <tr 
-                      key={pv.id} 
-                      className={`
-                        ${hasAttended ? 'bg-green-50 border-l-4 border-green-400' : 'bg-red-50 border-l-4 border-red-400'}
-                        ${pairInfo ? 'border-t-2 border-purple-200' : ''}
-                        ${isFirstInPair ? 'border-t-2 border-purple-400' : ''}
-                        hover:bg-gray-100 transition-colors duration-150
-                      `}
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center space-x-2">
-                          <span className="font-medium text-gray-900">
-                            {v.firstName} {v.lastName}
-                          </span>
-                          {pv.status === 'WAITLISTED' && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
-                              W
-                            </span>
-                          )}
-                          {pairInfo && (
-                            <span className="text-purple-600 text-sm">👥</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {v.contactNumber || 'N/A'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {v.email || 'N/A'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {v.shirtSize ? (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                            {v.shirtSize}
-                          </span>
-                        ) : (
-                          <span className="text-gray-500 text-sm">N/A</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {pairInfo ? (
-                          <div className="flex items-center space-x-1">
-                            <span className={`text-sm ${pairInfo.isConfirmed ? 'text-green-600' : 'text-yellow-600'}`}>
-                              {pairInfo.isConfirmed ? '✓' : '⏳'}
-                            </span>
-                            <span className="text-sm text-gray-700 font-medium">
-                              {pairInfo.partnerName}
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-gray-500 text-sm italic">No pair</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`
-                          inline-flex px-2 py-1 text-xs font-semibold rounded-full
-                          ${pv.status === 'SELECTED' 
-                            ? 'bg-green-100 text-green-800' 
-                            : 'bg-yellow-100 text-yellow-800'}
-                        `}>
-                          {pv.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            id={`attendance-${pv.id}`}
-                            checked={hasAttended}
-                            onChange={(e) => handleAttendanceChange(pv.id, e.target.checked)}
-                            className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
-                          />
-                          <label htmlFor={`attendance-${pv.id}`} className="cursor-pointer">
-                            {hasAttended ? (
-                              <div className="flex items-center text-green-600">
-                                <Check className="w-4 h-4 mr-1" />
-                                <span className="text-sm font-medium">Attended</span>
-                              </div>
-                            ) : (
-                              <div className="flex items-center text-red-600">
-                                <X className="w-4 h-4 mr-1" />
-                                <span className="text-sm font-medium">Not Attended</span>
-                              </div>
-                            )}
-                          </label>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <button
-                          onClick={() => handleAttendanceChange(pv.id, !hasAttended)}
-                          className={`
-                            inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md
-                            ${hasAttended 
-                              ? 'text-red-700 bg-red-100 hover:bg-red-200' 
-                              : 'text-green-700 bg-green-100 hover:bg-green-200'}
-                            focus:outline-none focus:ring-2 focus:ring-offset-2
-                            ${hasAttended ? 'focus:ring-red-500' : 'focus:ring-green-500'}
-                          `}
-                          title={hasAttended ? 'Mark as not attended' : 'Mark as attended'}
-                        >
-                          {hasAttended ? (
-                            <>
-                              <UserX className="w-3 h-3 mr-1" />
-                              Mark Absent
-                            </>
-                          ) : (
-                            <>
-                              <UserCheck className="w-3 h-3 mr-1" />
-                              Mark Present
-                            </>
-                          )}
-                        </button>
-                      </td>
-                    </tr>
+                    <React.Fragment key={pv.id}>
+                      {renderVolunteerRow(pv, index, pairInfo)}
+                      {/* Add separator between pairs */}
+                      {shouldAddSeparator && (
+                        <tr className="border-b-2 border-blue-200">
+                          <td colSpan="8" className="h-1"></td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   );
                 })
               )}
