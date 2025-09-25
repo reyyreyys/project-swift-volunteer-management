@@ -623,12 +623,12 @@ app.post('/api/volunteers/import-csv', authenticateToken, async (req, res) => {
           let volunteer;
           let isExisting = false;
 
-          // *** ONLY CHANGE: Check if volunteer exists by first and last name ***
+          // Check if volunteer exists by first and last name (ONLY CHANGE FROM ORIGINAL)
           const existingVolunteer = await tx.volunteer.findFirst({
             where: {
               AND: [
-                { firstName: { equals: cleanData.firstName, mode: 'insensitive' } },
-                { lastName: { equals: cleanData.lastName, mode: 'insensitive' } }
+                { firstName: cleanData.firstName },
+                { lastName: cleanData.lastName }
               ]
             }
           });
@@ -703,8 +703,6 @@ app.post('/api/volunteers/import-csv', authenticateToken, async (req, res) => {
           });
         }
       }
-    }, {
-      timeout: 60000 // Increase timeout to 60 seconds to prevent transaction timeout
     });
 
     // STEP 2: Recalculate experience for ALL volunteers using correct table names
