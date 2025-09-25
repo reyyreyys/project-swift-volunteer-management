@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import apiClient from '../apiClient'; // Changed from 'axios' to 'apiClient'
+import apiClient from '../api/axiosClient'; // Changed from 'axios' to 'apiClient'
 import { Plus, Search, FolderOpen, Users, Calendar } from 'lucide-react';
 import CreateProjectModal from './CreateProjectModal';
 

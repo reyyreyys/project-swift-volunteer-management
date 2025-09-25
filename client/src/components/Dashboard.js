@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import apiClient from '../apiClient'; // Changed from 'axios' to 'apiClient'
+import apiClient from '../api/axiosClient'; // Changed from 'axios' to 'apiClient'
 import { FolderOpen, Users, UserCheck, Plus, Activity } from 'lucide-react';
 
 const Dashboard = () => {
