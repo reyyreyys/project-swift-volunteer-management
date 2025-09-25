@@ -16,9 +16,11 @@ apiClient.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    console.log('Request interceptor - config:', config); // Debug log
     return config;
   },
   (error) => {
+    console.log('Request interceptor - error:', error); // Debug log
     return Promise.reject(error);
   }
 );
@@ -28,11 +30,18 @@ let isLoggingOut = false;
 
 apiClient.interceptors.response.use(
   (response) => {
+    console.log('Response interceptor - success:', response); // Debug log
     return response;
   },
   (error) => {
+    console.log('Response interceptor - error triggered:', error); // Debug log
+    console.log('Error response:', error.response); // Debug log
+    console.log('Error status:', error?.response?.status); // Debug log
+    
     const status = error?.response?.status;
     const errorMessage = error?.response?.data?.error || '';
+    
+    console.log('Checking conditions - status:', status, 'errorMessage:', errorMessage); // Debug log
     
     // Check for token expiration (401/403 status or specific error message)
     const isTokenExpired = 
@@ -40,15 +49,30 @@ apiClient.interceptors.response.use(
       status === 403 || 
       /invalid|expired token/i.test(errorMessage);
     
+    console.log('Is token expired:', isTokenExpired, 'Is logging out:', isLoggingOut); // Debug log
+    
     if (isTokenExpired && !isLoggingOut) {
+      console.log('LOGGING OUT - clearing token and redirecting'); // Debug log
       isLoggingOut = true;
       
       // Clear auth data
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       
-      // Force redirect to login page
-      window.location.assign('/login');
+      // Reset the flag after a brief delay
+      setTimeout(() => {
+        isLoggingOut = false;
+      }, 1000);
+      
+      // Try multiple redirect methods
+      try {
+        // Method 1: window.location.assign
+        window.location.assign('/login');
+      } catch (e) {
+        console.log('assign failed, trying href:', e);
+        // Method 2: window.location.href
+        window.location.href = '/login';
+      }
     }
     
     return Promise.reject(error);
