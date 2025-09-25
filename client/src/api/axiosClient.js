@@ -23,4 +23,36 @@ apiClient.interceptors.request.use(
   }
 );
 
+// Add response interceptor to handle token expiration
+let isLoggingOut = false;
+
+apiClient.interceptors.response.use(
+  (response) => {
+    return response;
+  },
+  (error) => {
+    const status = error?.response?.status;
+    const errorMessage = error?.response?.data?.error || '';
+    
+    // Check for token expiration (401/403 status or specific error message)
+    const isTokenExpired = 
+      status === 401 || 
+      status === 403 || 
+      /invalid|expired token/i.test(errorMessage);
+    
+    if (isTokenExpired && !isLoggingOut) {
+      isLoggingOut = true;
+      
+      // Clear auth data
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      
+      // Force redirect to login page
+      window.location.assign('/login');
+    }
+    
+    return Promise.reject(error);
+  }
+);
+
 export default apiClient;
