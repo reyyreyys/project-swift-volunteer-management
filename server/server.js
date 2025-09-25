@@ -623,12 +623,12 @@ app.post('/api/volunteers/import-csv', authenticateToken, async (req, res) => {
           let volunteer;
           let isExisting = false;
 
-          // Check if volunteer exists by email or contact number
+          // Check if volunteer exists by first and last name (ONLY CHANGE)
           const existingVolunteer = await tx.volunteer.findFirst({
             where: {
-              OR: [
-                ...(cleanData.email ? [{ email: cleanData.email }] : []),
-                ...(cleanData.contactNumber ? [{ contactNumber: cleanData.contactNumber }] : [])
+              AND: [
+                { firstName: cleanData.firstName },
+                { lastName: cleanData.lastName }
               ]
             }
           });
@@ -777,6 +777,7 @@ app.post('/api/volunteers/import-csv', authenticateToken, async (req, res) => {
     });
   }
 });
+
 
 
 // In your backend route
