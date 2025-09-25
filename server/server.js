@@ -555,6 +555,7 @@ app.get('/api/projects/:id/volunteers-with-experience', authenticateToken, check
 });
 
 // Enhanced import volunteers from CSV with proper project linking
+// Enhanced import volunteers from CSV with proper project linking
 app.post('/api/volunteers/import-csv', authenticateToken, async (req, res) => {
   try {
     const { volunteers, projectId } = req.body;
@@ -572,9 +573,10 @@ app.post('/api/volunteers/import-csv', authenticateToken, async (req, res) => {
     let linkedToProject = 0;
     const errors = [];
     
-    await prisma.$transaction(async (tx) => {
-      for (const volunteerData of volunteers) {
-        try {
+    // Process each volunteer in its own transaction to prevent cascading failures
+    for (const volunteerData of volunteers) {
+      try {
+        await prisma.$transaction(async (tx) => {
           // Ensure timestamp/submissionDate is properly handled
           const submissionDate = volunteerData.submissionDate || volunteerData.timestamp || new Date();
           
@@ -612,23 +614,23 @@ app.post('/api/volunteers/import-csv', authenticateToken, async (req, res) => {
             // Additional
             comments: volunteerData.comments || null,
             
-            // Timestamps - NOTE: Your schema only has 'timestamp', not 'submissionDate'
+            // Timestamps
             timestamp: submissionDate,
             
             // System fields
-            isPublic: volunteerData.isPublic !== false, // Default to true
+            isPublic: volunteerData.isPublic !== false,
             createdById: req.user.userId
           };
 
           let volunteer;
           let isExisting = false;
 
-          // Check if volunteer exists by email or contact number
+          // Check if volunteer exists by first and last name
           const existingVolunteer = await tx.volunteer.findFirst({
             where: {
-              OR: [
-                ...(cleanData.email ? [{ email: cleanData.email }] : []),
-                ...(cleanData.contactNumber ? [{ contactNumber: cleanData.contactNumber }] : [])
+              AND: [
+                { firstName: cleanData.firstName },
+                { lastName: cleanData.lastName }
               ]
             }
           });
@@ -657,7 +659,6 @@ app.post('/api/volunteers/import-csv', authenticateToken, async (req, res) => {
                 comments: cleanData.comments,
                 experienceSummary: cleanData.experienceSummary,
                 timestamp: cleanData.timestamp,
-                // Don't update createdById for existing volunteers
               }
             });
             isExisting = true;
@@ -671,15 +672,14 @@ app.post('/api/volunteers/import-csv', authenticateToken, async (req, res) => {
           }
 
           // ALWAYS link volunteer to current project using correct field names
-          const projectVolunteerLink = await tx.projectVolunteer.upsert({
+          await tx.projectVolunteer.upsert({
             where: {
               projectId_volunteerId: {
-                projectId: projectId, // Keep as string since your schema uses String
+                projectId: projectId,
                 volunteerId: volunteer.id
               }
             },
             update: {
-              // Update status and timestamp but keep existing link
               status: 'PENDING',
               addedAt: new Date()
             },
@@ -694,16 +694,16 @@ app.post('/api/volunteers/import-csv', authenticateToken, async (req, res) => {
           });
 
           linkedToProject++;
+        });
 
-        } catch (error) {
-          console.error(`Error processing volunteer ${volunteerData.firstName} ${volunteerData.lastName}:`, error);
-          errors.push({
-            volunteer: `${volunteerData.firstName || 'Unknown'} ${volunteerData.lastName || 'Volunteer'}`,
-            error: error.message
-          });
-        }
+      } catch (error) {
+        console.error(`Error processing volunteer ${volunteerData.firstName} ${volunteerData.lastName}:`, error);
+        errors.push({
+          volunteer: `${volunteerData.firstName || 'Unknown'} ${volunteerData.lastName || 'Volunteer'}`,
+          error: error.message
+        });
       }
-    });
+    }
 
     // STEP 2: Recalculate experience for ALL volunteers using correct table names
     try {
